@@ -16,23 +16,25 @@
 #define PORT 123     /* server port the client connects to */
 #define MAXBUFLEN 200
 
+//#define NTP_EPOCH       (86400U * (365U * 70U + 17U))
+
 struct ntp_packet {
  // unsigned version;
-  unsigned char li_vn_mode;
-  unsigned char stratum;
-  char poll;
-  char precision;
-  unsigned long root_delay;
-  unsigned long root_dispersion;
-  unsigned long reference_identifier;
-  unsigned long reference_timestamp_secs;
-  unsigned long reference_timestamp_fraq;
-  unsigned long originate_timestamp_secs;
-  unsigned long originate_timestamp_fraq;
-  unsigned long receive_timestamp_seqs;
-  unsigned long receive_timestamp_fraq;
-  unsigned long transmit_timestamp_secs;
-  unsigned long transmit_timestamp_fraq;
+  uint8_t li_vn_mode;
+  uint8_t stratum;
+  uint8_t poll;
+  uint8_t precision;
+  uint32_t root_delay;
+  uint32_t root_dispersion;
+  uint32_t reference_identifier;
+  uint32_t reference_timestamp_secs;
+  uint32_t reference_timestamp_fraq;
+  uint32_t originate_timestamp_secs;
+  uint32_t originate_timestamp_fraq;
+  uint32_t receive_timestamp_secs;
+  uint32_t receive_timestamp_fraq;
+  uint32_t transmit_timestamp_secs;
+  uint32_t transmit_timestamp_fraq;
 };
 
 struct ntp_time_t {
@@ -65,6 +67,7 @@ int main( int argc, char * argv[]) {
   // set SNTP V4 and Mode 3(client)
   pkt.li_vn_mode = (4 << 3) | 3; // (vn << 3) | mode
   printf( "Mode of packet to send: %u\n", pkt.li_vn_mode);
+//  pkt.transmit_timestamp_secs = time(0) + NTP_EPOCH;
 
   if( argc != 2) {
     fprintf( stderr, "usage: simpleclient hostname\n");
@@ -87,7 +90,7 @@ int main( int argc, char * argv[]) {
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
   // send NTP packet
-  if( (numbytes = sendto( sockfd, &pkt, 48, 0, // TODO: make sizeof pkt work
+  if( (numbytes = sendto( sockfd, &pkt, 48, 0, //48 TODO: make sizeof pkt work
       (struct sockaddr *)&their_addr, sizeof( struct sockaddr))) == -1) {
       perror( "Talker sendto");
       exit( 1);
@@ -106,14 +109,12 @@ int main( int argc, char * argv[]) {
 
   printf( "Got packet from %s\n", inet_ntoa( their_addr.sin_addr));
   printf( "Recieved packet is %d bytes long\n", numbytes);
-  printf( "Mode of recieved packet is: %u\n", pkt.li_vn_mode);
 
-  ref_time.second = pkt.reference_timestamp_secs;
-  ref_time.fraction = pkt.reference_timestamp_fraq;
+  ref_time.second = ntohl(pkt.reference_timestamp_secs);
+  ref_time.fraction = ntohl(pkt.reference_timestamp_fraq);
   convert_ntp_time_into_unix_time(&ref_time, &nix);
-  printf("NTP time: %ld %ld\n", pkt.reference_timestamp_secs, pkt.reference_timestamp_fraq);
+  printf("NTP time: %ld %ld\n", ref_time.second, ref_time.fraction);
   printf("UNIX Time: %ld %ld\n", nix.tv_sec, nix.tv_usec);
-  printf("%ld.%06ld\n", nix.tv_sec, nix.tv_usec);
 //  printf( "Ref timestamp is: %u\n", pkt.secs
 
   close( sockfd);
