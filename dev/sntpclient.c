@@ -1,6 +1,7 @@
 /* talker.c - a datagram 'client'
  * need to supply host name/IP and one word message,
  * e.g. talker localhost hello
+ *
  */
 #include "timeconvertion.h"
 #include <stdio.h>
@@ -43,13 +44,15 @@ void create_packet(struct ntp_packet *pkt);
 int initialise_connection_to_server(char hostanme[],
                                     struct sockaddr_in *their_addr,
                                     int *sockfd);
+int send_SNTP_packet(struct ntp_packet *pkt,
+                     struct sockaddr_in *their_addr,
+                     int *sockfd);
 int process_cmdline(int argc, char * argv[]);
 
 int main( int argc, char * argv[]) {
   int sockfd, numbytes;
   int addr_len;
   struct ntp_packet pkt;
-  //struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
 
   struct ntp_time_t ref_time;
@@ -60,38 +63,26 @@ int main( int argc, char * argv[]) {
     exit(1);
   }
 
+  // connect to ntp server
   if (initialise_connection_to_server(argv[ 1], &their_addr, &sockfd) != 0){
     exit(1);
   }
 
-  /* resolve server host name or IP address */
-  //if( (he = gethostbyname( argv[ 1])) == NULL) {
-  //  perror( "simpleclient gethostbyname");
-  //  exit( 1);
-  //}
-
-//  if( (sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-//    perror( "simpleclient socket");
-//    exit( 1);
-//  }
-
-  //memset( &their_addr,0, sizeof(their_addr)); /* zero struct */
-//  their_addr.sin_family = AF_INET;    /* host byte order .. */
-  //their_addr.sin_port = htons( PORT); /* .. short, netwk byte order */
-  //their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
-
-
+  // build sntp packet
   create_packet(&pkt);
 
   // send NTP packet
-  if( (numbytes = sendto( sockfd, &pkt, 48, 0, //48 TODO: make sizeof pkt work
+  if (send_SNTP_packet() != 0){
+    exit(1)
+  }
+  /*if( (numbytes = sendto( sockfd, &pkt, 48, 0, //48 TODO: make sizeof pkt work
       (struct sockaddr *)&their_addr, sizeof( struct sockaddr))) == -1) {
       perror( "Talker sendto");
       exit( 1);
   }
 
   printf( "Sent %d bytes to %s\n", numbytes,
-                          inet_ntoa( their_addr.sin_addr));
+                          inet_ntoa( their_addr.sin_addr));*/
 
   // get response packet
   addr_len = sizeof( struct sockaddr);
@@ -147,7 +138,19 @@ int main( int argc, char * argv[]) {
    return 0;
  }
 
- int process_cmdline(int argc, char * argv[]){
+int send_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
+                          int *sockfd){
+  if( (numbytes = sendto( sockfd, &pkt, 48, 0, //48 TODO: make sizeof pkt work
+      (struct sockaddr *)&their_addr, sizeof( struct sockaddr))) == -1) {
+    perror( "Talker sendto");
+    return  1;
+  }
+  printf( "Sent %d bytes to %s\n", numbytes,
+                          inet_ntoa( their_addr.sin_addr));
+  return 0;
+}
+
+int process_cmdline(int argc, char * argv[]){
    if( argc != 2) {
      fprintf( stderr, "usage: simpleclient hostname\n");
      return 1;
