@@ -40,24 +40,24 @@ struct ntp_packet {
   uint32_t transmit_timestamp_fraq;
 };
 
+double calculate_clock_offset(struct ntp_packet server_pkt, struct timeval destination_time);
 void create_packet(struct ntp_packet *pkt);
 int initialise_connection_to_server(char hostanme[],
                                     struct sockaddr_in *their_addr, int *sockfd);
+void print_epoch_time_in_human_readable_form(struct timeval *epoch_time);
+void print_server_results(struct ntp_packet *pkt);
+int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
-                                    int *sockfd);
+                        int *sockfd, struct timeval *server_reply_epoch_time);
 int send_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
                      int *sockfd);
-int process_cmdline(int argc, char * argv[]);
-void print_epoch_time_in_human_readable_form(long secs, long fraq);
 
 int main( int argc, char * argv[]) {
   int sockfd;
   struct ntp_packet request_pkt; // request from client to server
   struct ntp_packet response_pkt; // response from server to client
   struct sockaddr_in their_addr;    /* server address info */
-
-  struct ntp_time_t ref_time;
-  struct timeval epoch;
+  struct timeval server_reply_epoch_time;
 
   // check cmd line arguments
   if (process_cmdline(argc, argv) != 0){
@@ -78,44 +78,41 @@ int main( int argc, char * argv[]) {
   }
 
   // recieve NTP response packet from server
-  if (recieve_SNTP_packet(&response_pkt, &their_addr, &sockfd) != 0){
+  if (recieve_SNTP_packet(&response_pkt, &their_addr, &sockfd, &server_reply_epoch_time) != 0){
     exit(1);
   }
 
   // TODO: run checks on packet here
-
-  ref_time.second = ntohl(response_pkt.reference_timestamp_secs);
-  ref_time.fraction = ntohl(response_pkt.reference_timestamp_fraq);
-  convert_ntp_time_into_unix_time(&ref_time, &epoch);
-  printf("NTP time: %u %u\n", ref_time.second, ref_time.fraction);
-  printf("UNIX Time: %ld %ld\n", epoch.tv_sec, epoch.tv_usec);
-//  printf( "Ref timestamp is: %u\n", pkt.secs
-
-
-  print_epoch_time_in_human_readable_form(epoch.tv_sec, epoch.tv_usec);
+  //printf("Offset: %f\n", calculate_clock_offset(response_pkt, server_reply_epoch_time));
+  print_server_results(&response_pkt);
 
   close( sockfd);
   return 0;
 }
 
 
+/*double calculate_clock_offset(struct ntp_packet server_pkt, struct timeval destination_time){
+  // convert bits?
+  double t1 = ntohl(server_pkt.originate_timestamp_secs) + ntohl(server_pkt.originate_timestamp_fraq);
+  double t2 = ntohl(server_pkt.receive_timestamp_secs) + ntohl(server_pkt.receive_timestamp_fraq);
+  double t3 = ntohl(server_pkt.transmit_timestamp_secs) + ntohl(server_pkt.transmit_timestamp_fraq);
+  double t4 = destination_time.tv_sec + destination_time.tv_usec;
+  return ((t2 - t1) + (t3 - t4)) / 2;
+}*/
+
+
 void create_packet(struct ntp_packet *pkt){
-   memset( pkt, 0, sizeof *pkt  );
+  struct timeval epoch;
+  struct ntp_time_t ntp;
+
+  memset( pkt, 0, sizeof *pkt );
    // set SNTP V4 and Mode 3(client)
-   pkt->li_vn_mode = (4 << 3) | 3; // (vn << 3) | mode
-   pkt->transmit_timestamp_secs = htonl(time(0) + NTP_EPOCH);
-   // TODO: do fraq/miliseconds
+  pkt->li_vn_mode = (4 << 3) | 3; // (vn << 3) | mode
+  gettimeofday(&epoch, NULL);
+  convert_nix_time_into_ntp_time(&epoch, &ntp);
+  pkt->transmit_timestamp_secs = htonl(ntp.second) ;
+  pkt->transmit_timestamp_fraq = htonl(ntp.fraction);
  }
-
-
-void print_epoch_time_in_human_readable_form(long secs, long fraq){
-  char readable_time_string[30];
-  struct tm  ts;
-
-  ts = *localtime(&secs);
-  strftime(readable_time_string, sizeof(readable_time_string), "%Y-%m-%d %H:%M:%S", &ts);
-  printf("%s.%ld\n", readable_time_string, fraq);
-}
 
 
 int initialise_connection_to_server(char hostname[],
@@ -143,8 +140,40 @@ int initialise_connection_to_server(char hostname[],
  }
 
 
+void print_epoch_time_in_human_readable_form(struct timeval *epoch_time){
+   char readable_time_string[30];
+   struct tm  ts;
+
+   ts = *localtime(&epoch_time->tv_sec);
+   strftime(readable_time_string, sizeof(readable_time_string), "%Y-%m-%d %H:%M:%S", &ts);
+   printf("%s.%ld\n", readable_time_string, epoch_time->tv_usec);
+ }
+
+
+void print_server_results(struct ntp_packet *pkt){
+  struct timeval transmit_time_epoch;
+  struct ntp_time_t  transmit_time_NTP;
+
+  transmit_time_NTP.second = ntohl(pkt->transmit_timestamp_secs);
+  transmit_time_NTP.fraction = ntohl(pkt->transmit_timestamp_fraq);
+  convert_ntp_time_into_unix_time(&transmit_time_NTP, &transmit_time_epoch);
+  print_epoch_time_in_human_readable_form(&transmit_time_epoch);
+  //  printf("NTP time: %u %u\n", ref_time.second, ref_time.fraction);
+  //  printf("UNIX Time: %ld %ld\n", epoch.tv_sec, epoch.tv_usec);
+}
+
+
+int process_cmdline(int argc, char * argv[]){
+    if( argc != 2) {
+      fprintf( stderr, "usage: simpleclient hostname\n");
+      return 1;
+    }
+    return 0;
+  }
+
+
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
-                                     int *sockfd){
+                        int *sockfd, struct timeval *server_reply_epoch_time){
   int addr_len;
   int numbytes;
   addr_len = sizeof( struct sockaddr);
@@ -153,7 +182,7 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
     perror( "Listener recvfrom");
     return  1;
   }
-
+  gettimeofday(server_reply_epoch_time, NULL);
   printf( "Got packet from %s\n", inet_ntoa( their_addr->sin_addr));
   printf( "Recieved packet is %d bytes long\n", numbytes);
   return 0;
@@ -172,12 +201,3 @@ int send_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
                           inet_ntoa( their_addr->sin_addr));
   return 0;
 }
-
-
-int process_cmdline(int argc, char * argv[]){
-   if( argc != 2) {
-     fprintf( stderr, "usage: simpleclient hostname\n");
-     return 1;
-   }
-   return 0;
- }
