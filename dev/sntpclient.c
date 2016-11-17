@@ -45,6 +45,7 @@ void create_packet(struct ntp_packet *pkt);
 int initialise_connection_to_server(char hostanme[],
                                     struct sockaddr_in *their_addr, int *sockfd);
 void print_epoch_time_in_human_readable_form(struct timeval *epoch_time);
+void print_packet(struct ntp_packet *pkt);
 void print_server_results(struct ntp_packet *pkt);
 int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct sockaddr_in *their_addr,
@@ -83,7 +84,7 @@ int main( int argc, char * argv[]) {
   }
 
   // TODO: run checks on packet here
-  //printf("Offset: %f\n", calculate_clock_offset(response_pkt, server_reply_epoch_time));
+  printf("Offset: %f\n", calculate_clock_offset(response_pkt, server_reply_epoch_time));
   print_server_results(&response_pkt);
 
   close( sockfd);
@@ -91,14 +92,38 @@ int main( int argc, char * argv[]) {
 }
 
 
-/*double calculate_clock_offset(struct ntp_packet server_pkt, struct timeval destination_time){
+double calculate_clock_offset(struct ntp_packet server_pkt, struct timeval destination_time){
   // convert bits?
-  double t1 = ntohl(server_pkt.originate_timestamp_secs) + ntohl(server_pkt.originate_timestamp_fraq);
-  double t2 = ntohl(server_pkt.receive_timestamp_secs) + ntohl(server_pkt.receive_timestamp_fraq);
-  double t3 = ntohl(server_pkt.transmit_timestamp_secs) + ntohl(server_pkt.transmit_timestamp_fraq);
-  double t4 = destination_time.tv_sec + destination_time.tv_usec;
+  struct ntp_time_t t1_ntp;
+  struct ntp_time_t t2_ntp;
+  struct ntp_time_t t3_ntp;
+  struct ntp_time_t t4_ntp;
+  struct timeval t1_epoch;
+  struct timeval t2_epoch;
+  struct timeval t3_epoch;
+  struct timeval t4_epoch;
+  //print_packet(&server_pkt);
+  t1_ntp.second =  ntohl(server_pkt.originate_timestamp_secs);
+  t1_ntp.fraction = ntohl(server_pkt.originate_timestamp_fraq);
+  convert_ntp_time_into_unix_time(&t1_ntp, &t1_epoch);
+  double t1 = t1_epoch.tv_sec + ((double) t1_epoch.tv_usec / 1000000);
+
+  t2_ntp.second =  ntohl(server_pkt.receive_timestamp_secs);
+  t2_ntp.fraction = ntohl(server_pkt.receive_timestamp_fraq);
+  convert_ntp_time_into_unix_time(&t2_ntp, &t2_epoch);
+  double t2 = t2_epoch.tv_sec + ((double) t2_epoch.tv_usec / 1000000);
+
+  t3_ntp.second =  ntohl(server_pkt.transmit_timestamp_secs);
+  t3_ntp.fraction = ntohl(server_pkt.transmit_timestamp_fraq);
+  convert_ntp_time_into_unix_time(&t3_ntp, &t3_epoch);
+  double t3 = t3_epoch.tv_sec + ((double) t3_epoch.tv_usec / 1000000);
+
+  double t4 = destination_time.tv_sec + ((double) destination_time.tv_usec / 1000000);
+  printf("t times: %f %f %f %f\n", t1, t2, t3, t4);
+
   return ((t2 - t1) + (t3 - t4)) / 2;
-}*/
+//  return 0.0;
+}
 
 
 void create_packet(struct ntp_packet *pkt){
@@ -148,6 +173,17 @@ void print_epoch_time_in_human_readable_form(struct timeval *epoch_time){
    strftime(readable_time_string, sizeof(readable_time_string), "%Y-%m-%d %H:%M:%S", &ts);
    printf("%s.%ld\n", readable_time_string, epoch_time->tv_usec);
  }
+
+
+void print_packet(struct ntp_packet *pkt){
+  printf("\n\nContents of packet:\n");
+  printf("originate_timestamp_secs: %u\n", pkt->originate_timestamp_secs);
+  printf("originate_timestamp_fraq: %u\n", pkt->originate_timestamp_fraq);
+  printf("receive_timestamp_secs: %u\n", pkt->receive_timestamp_secs);
+  printf("receive_timestamp_fraq: %u\n", pkt->receive_timestamp_fraq);
+  printf("receive_timestamp_secs: %u\n", pkt->transmit_timestamp_secs);
+  printf("receive_timestamp_fraq: %u\n\n", pkt->transmit_timestamp_fraq);
+}
 
 
 void print_server_results(struct ntp_packet *pkt){
