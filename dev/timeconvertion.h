@@ -8,4 +8,4 @@ struct ntp_time_t {
 };
 
 void convert_ntp_time_into_unix_time(struct ntp_time_t *ntp, struct timeval *epoch);
-void convert_nix_time_into_ntp_time(struct timeval *epoch, struct ntp_time_t *ntp);
+void convert_unix_time_into_ntp_time(struct timeval *epoch, struct ntp_time_t *ntp);
