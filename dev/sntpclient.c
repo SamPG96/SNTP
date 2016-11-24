@@ -186,8 +186,21 @@ int initialise_connection_to_server(char addr[], struct connection_info *cn){
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
   // get server hostname, if one exists
-  cn->name = gethostbyaddr((char *)&their_addr.sin_addr, sizeof(
-                          their_addr.sin_addr), their_addr.sin_family)->h_name;
+  //by_addr = gethostbyaddr((char *)&their_addr.sin_addr, sizeof(
+    //                      their_addr.sin_addr), their_addr.sin_family);
+//  struct in_addr test_in;
+//  test_in.s_addr = their_addr.sin_addr;
+//  printf("TEST: %i", their_addr.sin_addr);
+  struct hostent *he2;
+  struct in_addr ipv4addr;
+//  inet_pton(AF_INET, "0.uk.pool.ntp.org", &ipv4addr);
+//  he2 = gethostbyaddr(&ipv4addr, sizeof ipv4addr, AF_INET);
+//  printf("HERE");
+//printf("HOST: %s", he2->h_name);
+//  if(! by_addr){
+//    printf("ERROR!");
+//  }
+  //cn->name = by_addr->h_name;
   cn->addr = their_addr;
   return 0;
  }
@@ -239,6 +252,18 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
   return 0;
 }
 
+
+/*bool run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet res_pkt,){
+  // the originate time in the server reply should be the same as the transmit
+  // time in the request
+  if ((req_pkt.transmit_timestamp.second != res_pkt.transmit_timestamp.second) ||
+
+
+  // LI, stratum and Transmit timestamp should not be 0
+
+  // response mode must be 4
+  //if (req_pkt.res_pkt.
+}*/
 
 int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn){
   int numbytes;
