@@ -53,6 +53,18 @@ struct connection_info{
   int sockfd;
 };
 
+
+/* TODO:
+    - add logging
+    - use getopt
+    - repeat requests (no less than 1 minute, enforce gap)
+    - use config files
+    - handle kiss-o-death,check client operations in RFC
+    - sanity check: check recieve time is non-zero?
+    - print to stderr, diff between perror??
+
+*/
+
 double calculate_clock_offset(struct core_ts ts);
 void close_connection(struct connection_info cn);
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time);
