@@ -1,4 +1,4 @@
-#include "timeconvertion.h"
+#include "reusedlib.h"
 
 
 void convert_ntp_time_into_unix_time(struct ntp_time_t *ntp, struct timeval *epoch)
@@ -11,4 +11,13 @@ void convert_unix_time_into_ntp_time(struct timeval *epoch, struct ntp_time_t *n
 {
     ntp->second = epoch->tv_sec + 0x83AA7E80;
     ntp->fraction = (uint32_t)( (double)(epoch->tv_usec+1) * (double)(1LL<<32) * 1.0e-6 );
+}
+
+void set_socket_recvfrom_timeout(int sockfd, int seconds){
+  struct timeval tv;
+
+  tv.tv_sec = seconds;  /* 30 Secs Timeout */
+  tv.tv_usec = 0;  // Not init'ing this can cause strange errors
+
+  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
 }
