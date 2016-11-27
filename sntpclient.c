@@ -16,13 +16,20 @@
 #include <time.h>
 #include <netdb.h>         /* for gethostbyname() */
 
-#define PORT 123     /* server port the client connects to */
+#define CONFIG_FILE "config.cfg"
+
+// max number of retries for trying to get a reply from a unicast server
+#define DEFAULT_MAX_UNICAST_RETRY_LIMIT 2
+// min number of seconds between polling the same server
+#define DEFAULT_MIN_POLL_WAIT 15
+// server port the client connects to
+#define DEFAULT_SERVER_PORT 123
+// seconds to wait for a server response
+#define DEFAULT_RECV_TIMEOUT 10
+// the maximum number of occasions to fetch updates of the server time
+#define DEFAULT_REPEAT_UPDATE_LIMIT 3
+
 #define MAXBUFLEN 200
-#define MIN_REQUEST_GAP 8  // min number of seconds between making requests
-                           // to the same server.
-#define MAX_UNICAST_RETRY_COUNT 2
-#define RECV_TIMEOUT 4 // seconds to wait for a server response.
-#define REPEAT_UPDATE_LIMIT 3
 
 
 struct ntp_packet {
@@ -53,6 +60,16 @@ struct connection_info{
   int sockfd;
 };
 
+// stores all crucial settings for the client
+struct client_settings{
+  char *server_host;
+  int server_port;
+  int recv_timeout;   //seconds
+  int max_unicast_retries;
+  int poll_wait;  // seconds
+  int repeat_update_limit;
+};
+
 
 /* TODO:
     - add logging
@@ -69,9 +86,10 @@ double calculate_clock_offset(struct core_ts ts);
 void close_connection(struct connection_info cn);
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time);
 void create_packet(struct ntp_packet *pkt);
+struct client_settings get_client_settings(int argc, char * argv[]);
 int get_elapsed_time(struct timeval start_time);
 void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts );
-int initialise_connection_to_server(char addr[], struct connection_info *cn );
+int initialise_connection_to_server(struct client_settings c_settings, struct connection_info *cn );
 void print_server_results(struct core_ts ts, struct connection_info cn, int stratum);
 int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
@@ -79,51 +97,53 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt);
 int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn);
 struct timeval start_timer();
-int unicast_request( char addr[]);
+int unicast_request(struct client_settings c_settings);
 
 
 
 int main( int argc, char * argv[]) {
   int exit_code;
+  struct client_settings c_settings;
 
   // check cmd line arguments
   if (process_cmdline(argc, argv) != 0){
     exit(1);
   }
 
-  // request the time from the server REPEAT_UPDATE_LIMIT amount of times
-  for (int counter = 0; counter < REPEAT_UPDATE_LIMIT; counter++){
-    if ((exit_code = unicast_request(argv[1])) != 0){
-      // provide useful output of errors that may occur.
+  c_settings = get_client_settings(argc, argv);
+
+  // request the time from the server repeat_update_limit amount of times
+  for (int counter = 0; counter < c_settings.repeat_update_limit; counter++){
+    if ((exit_code = unicast_request(c_settings)) != 0){
+      // provide useful output for errors that may occur.
       printf("error with request number %i - ", counter+1);
       switch(exit_code){
         case 2:
-          printf("unicast server not found(2)\n");
+          printf("unicast server not found\n");
           break;
         case 3:
-          printf("failed to create socket to server(3)\n");
+          printf("failed to create socket to server\n");
           break;
         case 4:
-          printf("max number of retries hit(4)\n");
+          printf("max number of retries hit\n");
           break;
         default:
-          printf("unknown(%i)\n", exit_code);
+          printf("unknown(code=%i)\n", exit_code);
       }
     }
   }
-
   return 0;
 }
 
 /*
-  Returnn codes:
+  Return codes:
     0 - success
     1 - other error
     2 - host doesnt exist
     3 - cant create socket
     4 - max retry's hit
 */
-int unicast_request( char addr[]){
+int unicast_request(struct client_settings c_settings){
   struct timeval time_of_prev_request;
   int exit_code;
   int retry_count;
@@ -134,7 +154,7 @@ int unicast_request( char addr[]){
   struct core_ts serv_ts; // core times
 
   // connect to ntp server
-  if ((exit_code = initialise_connection_to_server(addr, &server_connection)) != 0){
+  if ((exit_code = initialise_connection_to_server(c_settings, &server_connection)) != 0){
     return exit_code;
   }
 
@@ -146,16 +166,18 @@ int unicast_request( char addr[]){
 
   // keep retrying until a valid packet has been identified.
   while (!valid_reply){
-    if (retry_count > MAX_UNICAST_RETRY_COUNT){
+    if (retry_count > c_settings.max_unicast_retries){
+      // stop trying and return an error
       return 4;
     }
-    /* enforce a min wait between requests, as requested by RFC.
-       note that the time between requests will be the value of RECV_TIMEOUT, if it
-       is larger number than MIN_REQUEST_GAP as the timer starts before the
+
+    /* enforce a min wait between requests, to avoid getting blocked by ther server.
+       note that the time between requests will be the value of recv_timeout if it
+       is larger number than poll_wait, as the timer starts before the
        request is sent.
     */
     if (time_of_prev_request.tv_sec != -1 &&
-            get_elapsed_time(time_of_prev_request) <= MIN_REQUEST_GAP){
+            get_elapsed_time(time_of_prev_request) <= c_settings.poll_wait){
       continue;
     }
 
@@ -243,6 +265,70 @@ void create_packet(struct ntp_packet *pkt){
  }
 
 
+/*
+  precedence order(from high to low):
+    - commandline
+    - config file
+    - defaults
+*/
+struct client_settings get_client_settings(int argc, char * argv[]){
+   int max_unicast_retries;
+   int repeat_update_limit;
+   int port;
+   int poll_wait;
+   int recv_timeout;
+   struct client_settings c_settings;
+   config_t cfg;
+
+   cfg = setup_config_file(CONFIG_FILE); // get config file options
+
+   // host should always come from the commandline
+   c_settings.server_host = argv[1];
+
+   // set server port
+   if (config_lookup_int(&cfg, "server_port", &port)){
+     c_settings.server_port = port;
+   }
+   else{
+     c_settings.server_port = DEFAULT_SERVER_PORT;
+   }
+
+   // set socket timeout
+   if (config_lookup_int(&cfg, "recv_timeout", &recv_timeout)){
+     c_settings.recv_timeout = recv_timeout;
+   }
+   else{
+     c_settings.recv_timeout = DEFAULT_RECV_TIMEOUT;
+   }
+
+   // set max unicast retry limit
+   if (config_lookup_int(&cfg, "max_unicast_retries", &max_unicast_retries)){
+     c_settings.max_unicast_retries = max_unicast_retries;
+   }
+   else{
+     c_settings.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
+   }
+
+   // set minimum time till polling the same server again
+   if (config_lookup_int(&cfg, "poll_wait", &poll_wait)){
+     c_settings.poll_wait = poll_wait;
+   }
+   else{
+     c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
+   }
+
+   // set the maximum number of occasions to fetch updates of the server time.
+   if (config_lookup_int(&cfg, "repeat_update_limit", &repeat_update_limit)){
+     c_settings.repeat_update_limit = repeat_update_limit;
+   }
+   else{
+     c_settings.repeat_update_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+   }
+
+   return c_settings;
+ }
+
+
 int get_elapsed_time(struct timeval start_time){
    struct timeval end_time;
 
@@ -271,12 +357,12 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct cor
 }
 
 
-int initialise_connection_to_server(char addr[], struct connection_info *cn){
+int initialise_connection_to_server(struct client_settings c_settings, struct connection_info *cn){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
 
   /* resolve server host name or IP address */
-  if( (he = gethostbyname( addr)) == NULL) {
+  if( (he = gethostbyname( c_settings.server_host)) == NULL) {
     fprintf( stderr, "ERROR: initialise_connection_to_server: host not found\n");
     return 2;
   }
@@ -286,11 +372,11 @@ int initialise_connection_to_server(char addr[], struct connection_info *cn){
     return 3;
   }
 
-  set_socket_recvfrom_timeout(cn->sockfd, RECV_TIMEOUT);
+  set_socket_recvfrom_timeout(cn->sockfd, c_settings.recv_timeout);
 
   memset( &their_addr,0, sizeof their_addr); /* zero struct */
   their_addr.sin_family = AF_INET;    /* host byte order .. */
-  their_addr.sin_port = htons( PORT); /* .. short, netwk byte order */
+  their_addr.sin_port = htons( c_settings.server_port); /* .. short, netwk byte order */
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
   // get server hostname, if one exists

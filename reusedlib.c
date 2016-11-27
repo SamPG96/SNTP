@@ -21,3 +21,20 @@ void set_socket_recvfrom_timeout(int sockfd, int seconds){
 
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
 }
+
+config_t setup_config_file(char *config_file){
+  config_t cfg;
+
+  config_init(&cfg);
+
+  /* Read the file. If there is an error, report it and exit. */
+  if(! config_read_file(&cfg, config_file))
+  {
+   fprintf(stderr, "ERROR: error reading config file(%s:%d - %s)\n",
+           config_error_file(&cfg), config_error_line(&cfg),
+           config_error_text(&cfg));
+   config_destroy(&cfg);
+   exit(1); // exit out if there is an issue with the config file
+  }
+  return cfg;
+}
