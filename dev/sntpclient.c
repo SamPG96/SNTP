@@ -181,13 +181,13 @@ int initialise_connection_to_server(char addr[], struct connection_info *cn){
 
   /* resolve server host name or IP address */
   if( (he = gethostbyname( addr)) == NULL) {
-    perror( "initialise_connection_to_server: host not found");
-    return 1;
+    fprintf( stderr, "ERROR: initialise_connection_to_server: host not found\n");
+    return 2;
   }
 
   if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    perror( "initialise_connection_to_server: error creating socket");
-    return 1;
+    fprintf( stderr, "ERROR: initialise_connection_to_server: error creating socket\n");
+    return 3;
   }
 
   memset( &their_addr,0, sizeof their_addr); /* zero struct */
@@ -253,12 +253,12 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
   addr_len = sizeof( struct sockaddr);
   if( (numbytes = recvfrom( cn.sockfd, pkt, MAXBUFLEN - 1, 0,
                (struct sockaddr *)&cn.addr, &addr_len)) == -1) {
-    perror( "recieve_SNTP_packet: recvfrom");
+    fprintf( stderr, "WARNING: timeout while waiting for server reply\n");
     return  1;
   }
   gettimeofday(&ts->destination_timestamp, NULL);
-  printf( "Got packet from %s\n", inet_ntoa( cn.addr.sin_addr));
-  printf( "Recieved packet is %d bytes long\n\n", numbytes);
+  printf( "INFO: Got packet from %s\n", inet_ntoa( cn.addr.sin_addr));
+  printf( "INFO: Recieved packet is %d bytes long\n\n", numbytes);
   return 0;
 }
 
@@ -325,10 +325,10 @@ int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn){
   int numbytes;
   if( (numbytes = sendto( cn.sockfd, pkt, 48, 0, //48 TODO: make sizeof pkt work
       (struct sockaddr *)&cn.addr, sizeof( struct sockaddr))) == -1) {
-    perror( "send_SNTP_packet: sendto");
+    fprintf( stderr, "WARNING: error with sending packet");
     return  1;
   }
-  printf( "Sent %d bytes to %s\n", numbytes,
+  printf( "INFO: Sent %d bytes to %s\n", numbytes,
                           inet_ntoa( cn.addr.sin_addr));
   return 0;
 }
