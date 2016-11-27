@@ -18,6 +18,12 @@
 
 #define PORT 123     /* server port the client connects to */
 #define MAXBUFLEN 200
+#define MIN_REQUEST_GAP 8  // min number of seconds between making requests
+                           // to the same server.
+#define MAX_UNICAST_RETRY_COUNT 2
+#define RECV_TIMEOUT 4 // seconds to wait for a server response.
+#define REPEAT_UPDATE_LIMIT 3
+
 
 struct ntp_packet {
   uint8_t li_vn_mode;
@@ -58,46 +64,124 @@ void print_server_results(struct core_ts ts, struct connection_info cn, int stra
 int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
                         struct core_ts *ts);
+int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt);
 int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn);
 struct timeval start_timer();
-
+int unicast_request( char addr[]);
 
 
 
 int main( int argc, char * argv[]) {
-  struct connection_info server_connection;
-  struct ntp_packet request_pkt; // request from client to server
-  struct ntp_packet response_pkt; // response from server to client
-  struct core_ts serv_ts; // core times
+  int exit_code;
 
   // check cmd line arguments
   if (process_cmdline(argc, argv) != 0){
     exit(1);
   }
 
+  // request the time from the server REPEAT_UPDATE_LIMIT amount of times
+  for (int counter = 0; counter < REPEAT_UPDATE_LIMIT; counter++){
+    if ((exit_code = unicast_request(argv[1])) != 0){
+      // provide useful output of errors that may occur.
+      printf("error with request number %i - ", counter+1);
+      switch(exit_code){
+        case 2:
+          printf("unicast server not found(2)\n");
+          break;
+        case 3:
+          printf("failed to create socket to server(3)\n");
+          break;
+        case 4:
+          printf("max number of retries hit(4)\n");
+          break;
+        default:
+          printf("unknown(%i)\n", exit_code);
+      }
+    }
+  }
+
+  return 0;
+}
+
+/*
+  Returnn codes:
+    0 - success
+    1 - other error
+    2 - host doesnt exist
+    3 - cant create socket
+    4 - max retry's hit
+*/
+int unicast_request( char addr[]){
+  struct timeval time_of_prev_request;
+  int exit_code;
+  int retry_count;
+  int valid_reply;
+  struct connection_info server_connection;
+  struct ntp_packet request_pkt; // request from client to server
+  struct ntp_packet reply_pkt; // reply from server to client
+  struct core_ts serv_ts; // core times
+
   // connect to ntp server
-  if (initialise_connection_to_server(argv[ 1], &server_connection) != 0){
-    exit(1);
+  if ((exit_code = initialise_connection_to_server(addr, &server_connection)) != 0){
+    return exit_code;
   }
 
-  // build sntp request packet
-  create_packet(&request_pkt);
+  retry_count = 1;
+  valid_reply = 0;
+  // enforces the loop below to skip the first wait check, as no timer has been
+  // set yet.
+  time_of_prev_request.tv_sec = -1;
 
-  // send request packet to server
-  if (send_SNTP_packet(&request_pkt, server_connection) != 0){
-    exit(1);
+  // keep retrying until a valid packet has been identified.
+  while (!valid_reply){
+    if (retry_count > MAX_UNICAST_RETRY_COUNT){
+      return 4;
+    }
+    /* enforce a min wait between requests, as requested by RFC.
+       note that the time between requests will be the value of RECV_TIMEOUT, if it
+       is larger number than MIN_REQUEST_GAP as the timer starts before the
+       request is sent.
+    */
+    if (time_of_prev_request.tv_sec != -1 &&
+            get_elapsed_time(time_of_prev_request) <= MIN_REQUEST_GAP){
+      continue;
+    }
+
+    // build sntp request packet
+    create_packet(&request_pkt);
+
+    // start timer
+    time_of_prev_request = start_timer();
+
+    // send request packet to server
+    if (send_SNTP_packet(&request_pkt, server_connection) != 0){
+      printf("WARNING: error sending request packet, waiting %i second(s) "
+             "until next poll.\n", get_elapsed_time(time_of_prev_request));
+      retry_count++;
+      continue;
+    }
+
+    // recieve NTP response packet from server
+    if (recieve_SNTP_packet(&reply_pkt, server_connection, &serv_ts) != 0){
+      printf("WARNING: error receiving reply packet, waiting %i second(s) "
+             "until next poll.\n", get_elapsed_time(time_of_prev_request));
+      retry_count++;
+      continue;
+    }
+
+    // check reply packet is valid and trusted
+    if (run_sanity_checks(request_pkt, reply_pkt) != 0){
+      printf("WARNING: error running sanity checks, waiting %i second(s) "
+             "until next poll.\n", get_elapsed_time(time_of_prev_request));
+      retry_count++;
+      continue;
+    }
+    valid_reply = 1;
   }
 
-  // recieve NTP response packet from server
-  if (recieve_SNTP_packet(&response_pkt, server_connection, &serv_ts) != 0){
-    exit(1);
-  }
+  get_timestamps_from_packet_in_epoch_time(&reply_pkt, &serv_ts);
 
-  get_timestamps_from_packet_in_epoch_time(&response_pkt, &serv_ts);
-
-  // TODO: run checks on packet here
-
-  print_server_results(serv_ts, server_connection, response_pkt.stratum);
+  print_server_results(serv_ts, server_connection, reply_pkt.stratum);
 
   close_connection(server_connection);
   return 0;
@@ -190,27 +274,16 @@ int initialise_connection_to_server(char addr[], struct connection_info *cn){
     return 3;
   }
 
+  set_socket_recvfrom_timeout(cn->sockfd, RECV_TIMEOUT);
+
   memset( &their_addr,0, sizeof their_addr); /* zero struct */
   their_addr.sin_family = AF_INET;    /* host byte order .. */
   their_addr.sin_port = htons( PORT); /* .. short, netwk byte order */
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
   // get server hostname, if one exists
-  //by_addr = gethostbyaddr((char *)&their_addr.sin_addr, sizeof(
-    //                      their_addr.sin_addr), their_addr.sin_family);
-//  struct in_addr test_in;
-//  test_in.s_addr = their_addr.sin_addr;
-//  printf("TEST: %i", their_addr.sin_addr);
-  struct hostent *he2;
-  struct in_addr ipv4addr;
-//  inet_pton(AF_INET, "0.uk.pool.ntp.org", &ipv4addr);
-//  he2 = gethostbyaddr(&ipv4addr, sizeof ipv4addr, AF_INET);
-//  printf("HERE");
-//printf("HOST: %s", he2->h_name);
-//  if(! by_addr){
-//    printf("ERROR!");
-//  }
-  //cn->name = by_addr->h_name;
+  cn->name = gethostbyaddr((char *)&their_addr.sin_addr, sizeof(
+                          their_addr.sin_addr), their_addr.sin_family)->h_name;
   cn->addr = their_addr;
   return 0;
  }
@@ -250,6 +323,7 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
   int addr_len;
   int numbytes;
 
+  memset( pkt, 0, sizeof *pkt );
   addr_len = sizeof( struct sockaddr);
   if( (numbytes = recvfrom( cn.sockfd, pkt, MAXBUFLEN - 1, 0,
                (struct sockaddr *)&cn.addr, &addr_len)) == -1) {
