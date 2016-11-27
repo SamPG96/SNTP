@@ -116,7 +116,7 @@ int main( int argc, char * argv[]) {
   for (int counter = 0; counter < c_settings.repeat_update_limit; counter++){
     if ((exit_code = unicast_request(c_settings)) != 0){
       // provide useful output for errors that may occur.
-      printf("error with request number %i - ", counter+1);
+      printf("error sending unicast request - ");
       switch(exit_code){
         case 2:
           printf("unicast server not found\n");
@@ -146,6 +146,7 @@ int main( int argc, char * argv[]) {
 int unicast_request(struct client_settings c_settings){
   struct timeval time_of_prev_request;
   int exit_code;
+  int rem_time;
   int retry_count;
   int valid_reply;
   struct connection_info server_connection;
@@ -189,24 +190,27 @@ int unicast_request(struct client_settings c_settings){
 
     // send request packet to server
     if (send_SNTP_packet(&request_pkt, server_connection) != 0){
-      printf("WARNING: error sending request packet, waiting %i second(s) "
-             "until next poll.\n", get_elapsed_time(time_of_prev_request));
+      rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
+      printf("WARNING: error sending request packet, polling again in %i second(s).\n",
+              (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
       retry_count++;
       continue;
     }
 
     // recieve NTP response packet from server
     if (recieve_SNTP_packet(&reply_pkt, server_connection, &serv_ts) != 0){
-      printf("WARNING: error receiving reply packet, waiting %i second(s) "
-             "until next poll.\n", get_elapsed_time(time_of_prev_request));
+      rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
+      printf("WARNING: error receiving reply packet, polling again in %i second(s).\n",
+             (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
     }
 
     // check reply packet is valid and trusted
     if (run_sanity_checks(request_pkt, reply_pkt) != 0){
-      printf("WARNING: error running sanity checks, waiting %i second(s) "
-             "until next poll.\n", get_elapsed_time(time_of_prev_request));
+      rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
+      printf("WARNING: error running sanity checks, polling again in %i second(s).\n",
+             (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
     }
