@@ -51,6 +51,7 @@ double calculate_clock_offset(struct core_ts ts);
 void close_connection(struct connection_info cn);
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time);
 void create_packet(struct ntp_packet *pkt);
+int get_elapsed_time(struct timeval start_time);
 void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts );
 int initialise_connection_to_server(char addr[], struct connection_info *cn );
 void print_server_results(struct core_ts ts, struct connection_info cn, int stratum);
@@ -58,6 +59,7 @@ int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
                         struct core_ts *ts);
 int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn);
+struct timeval start_timer();
 
 
 
@@ -142,6 +144,14 @@ void create_packet(struct ntp_packet *pkt){
   convert_unix_time_into_ntp_time(&epoch, &ntp);
   pkt->transmit_timestamp.second =  htonl(ntp.second);
   pkt->transmit_timestamp.fraction = htonl(ntp.fraction);
+ }
+
+
+int get_elapsed_time(struct timeval start_time){
+   struct timeval end_time;
+
+   gettimeofday(&end_time, NULL);
+   return end_time.tv_sec - start_time.tv_sec;
  }
 
 
@@ -275,4 +285,12 @@ int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn){
   printf( "Sent %d bytes to %s\n", numbytes,
                           inet_ntoa( cn.addr.sin_addr));
   return 0;
+}
+
+
+struct timeval start_timer(){
+  struct timeval start_time;
+
+  gettimeofday(&start_time, NULL);
+  return start_time;
 }
