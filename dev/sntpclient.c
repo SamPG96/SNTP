@@ -263,17 +263,63 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
 }
 
 
-/*bool run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet res_pkt,){
+int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt){
+  int rep_mode;
+  int rep_version;
+  int req_version;
+
+  rep_mode = rep_pkt.li_vn_mode & 0x7; // extract first 3 bits
+  req_version = (req_pkt.li_vn_mode >> 3) & 0x7; // extract bits 3 to 5
+  rep_version = (rep_pkt.li_vn_mode >> 3) & 0x7; // extract bits 3 to 5
+
   // the originate time in the server reply should be the same as the transmit
   // time in the request
-  if ((req_pkt.transmit_timestamp.second != res_pkt.transmit_timestamp.second) ||
+  if ((req_pkt.transmit_timestamp.second != rep_pkt.originate_timestamp.second) ||
+        (req_pkt.transmit_timestamp.fraction != rep_pkt.originate_timestamp.fraction)){
+    fprintf( stderr, "WARNING: the originate time in the server reply does not "
+             "match the transmit time in the request.\n");
+    return 1;
+  }
+
+  // check stratum is in range
+  else if (rep_pkt.stratum <= 0 || rep_pkt.stratum > 15){
+    fprintf( stderr, "WARNING: stratum is not in range 1 to 15(stratum=%i)\n", rep_pkt.stratum);
+    return 1;
+  }
+
+  // transmit time in the reply packet cant be zero
+  else if (rep_pkt.transmit_timestamp.second == 0 &&
+                rep_pkt.transmit_timestamp.fraction ==0){
+    fprintf( stderr, "WARNING: transmit time of reply packet is zero");
+    return 1;
+  }
+
+  // check mode is 4(server)
+  else if (rep_mode != 4){
+    fprintf( stderr, "WARNING: mode of reply packet is not server(mode=%i)\n", rep_mode);
+    return 1;
+  }
+
+  // server must be the same version as the client. This check irradicates
+  // the need to check if the version is non-zero as the client can never
+  // be non-zero.
+  else if (req_version != rep_version){
+    fprintf( stderr, "WARNING: server should be of the same version as the client\n");
+    return 1;
+  }
+
+  // TODO: fix this, infinity is defined as 1( stated in the RFC)
+  else if (rep_pkt.root_delay >= 0 && rep_pkt.root_delay < 1){
+    fprintf( stderr, "WARNING: root_delay of reply should be >=0 and < 1(root_delay=%i)", rep_pkt.root_delay);
+    return 1;
+  }
+
+  printf("%f\n", (double)ntohl(rep_pkt.root_delay) / 1000000);
+  return 0;
 
 
-  // LI, stratum and Transmit timestamp should not be 0
+}
 
-  // response mode must be 4
-  //if (req_pkt.res_pkt.
-}*/
 
 int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn){
   int numbytes;
