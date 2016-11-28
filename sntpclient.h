@@ -1,5 +1,4 @@
-#include "reusedlib.h"
-#include "sntpcommon.h"
+#include "sntptools.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

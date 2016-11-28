@@ -1,9 +1,8 @@
 #include <stdint.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include "reusedlib.h" // reused code found online
 
-#ifndef   REUSEDLIB_H
-#define   REUSEDLIB_H
-#endif
 
 struct ntp_packet {
   uint8_t li_vn_mode;
@@ -17,4 +16,10 @@ struct ntp_packet {
   struct ntp_time_t originate_timestamp;
   struct ntp_time_t receive_timestamp;
   struct ntp_time_t transmit_timestamp;
+};
+
+struct connection_info{
+  char *name; //hostname
+  struct sockaddr_in addr;
+  int sockfd;
 };
