@@ -18,12 +18,6 @@ struct core_ts {
   struct timeval destination_timestamp;
 };
 
-struct connection_info{
-  char *name; //hostname
-  struct sockaddr_in addr;
-  int sockfd;
-};
-
 // stores all crucial settings for the client
 struct client_settings{
   char *server_host;
@@ -53,7 +47,6 @@ struct client_settings{
 
 
 double calculate_clock_offset(struct core_ts ts);
-void close_connection(struct connection_info cn);
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time);
 void create_packet(struct ntp_packet *pkt);
 struct client_settings get_client_settings(int argc, char * argv[]);

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <unistd.h>
 #include "reusedlib.h" // reused code found online
 
 
@@ -23,3 +24,5 @@ struct connection_info{
   struct sockaddr_in addr;
   int sockfd;
 };
+
+void close_connection(struct connection_info cn);

@@ -157,11 +157,6 @@ double calculate_clock_offset(struct core_ts ts){
 }
 
 
-void close_connection(struct connection_info cn){
-  close( cn.sockfd);
-}
-
-
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time){
    char *readable_time_string;
    struct tm  ts;
