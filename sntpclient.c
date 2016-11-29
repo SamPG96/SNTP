@@ -8,6 +8,7 @@
 /* TODO:
     - add option to supress output
     - use getopt
+    - tidy config
     - handle when no config file is present
     - repeat requests (no less than 1 minute, enforce gap in main)
     - handle kiss-o-death,check client operations in RFC
