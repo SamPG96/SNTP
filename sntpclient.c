@@ -15,7 +15,7 @@
     - calculate errorbound
     - CHECK: sanity check: check recieve time is non-zero?
     - CHECK: print to stderr, diff between perror??
-    - CHECK: benefits of includes
+    - Add include guards
 
 */
 
