@@ -27,4 +27,5 @@ struct connection_info{
 };
 
 void close_connection(struct connection_info cn);
+struct ntp_time_t get_ntp_time_of_day();
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr);

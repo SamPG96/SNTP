@@ -5,6 +5,16 @@ void close_connection(struct connection_info cn){
 }
 
 
+struct ntp_time_t get_ntp_time_of_day(){
+  struct ntp_time_t ts_ntp;
+  struct timeval ts_unix;
+
+  gettimeofday(&ts_unix, NULL);
+  convert_unix_time_into_ntp_time(&ts_unix, &ts_ntp);
+  return ts_ntp;
+}
+
+
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr){
   int numbytes;
   if( (numbytes = sendto( sockfd, pkt, 48, 0, //48 TODO: make sizeof pkt work

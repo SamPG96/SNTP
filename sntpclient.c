@@ -174,16 +174,14 @@ char * convert_epoch_time_to_human_readable(struct timeval epoch_time){
 
 
 void create_packet(struct ntp_packet *pkt){
-  struct timeval epoch;
-  struct ntp_time_t ntp;
+  struct ntp_time_t transmit_ts_ntp;
 
   memset( pkt, 0, sizeof *pkt );
    // set SNTP V4 and Mode 3(client)
   pkt->li_vn_mode = (4 << 3) | 3; // (vn << 3) | mode
-  gettimeofday(&epoch, NULL);
-  convert_unix_time_into_ntp_time(&epoch, &ntp);
-  pkt->transmit_timestamp.second =  htonl(ntp.second);
-  pkt->transmit_timestamp.fraction = htonl(ntp.fraction);
+  transmit_ts_ntp = get_ntp_time_of_day();
+  pkt->transmit_timestamp.second =  htonl(transmit_ts_ntp.second);
+  pkt->transmit_timestamp.fraction = htonl(transmit_ts_ntp.fraction);
  }
 
 
