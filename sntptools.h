@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include "reusedlib.h" // reused code found online
 
@@ -26,3 +27,4 @@ struct connection_info{
 };
 
 void close_connection(struct connection_info cn);
+int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr);

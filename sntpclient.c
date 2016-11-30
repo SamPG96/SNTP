@@ -112,7 +112,7 @@ int unicast_request(struct client_settings c_settings){
     time_of_prev_request = start_timer();
 
     // send request packet to server
-    if (send_SNTP_packet(&request_pkt, server_connection) != 0){
+    if (send_SNTP_packet(&request_pkt, server_connection.sockfd, server_connection.addr) != 0){
       rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
       printf("WARNING: error sending request packet, polling again in %i second(s).\n",
               (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
@@ -417,19 +417,6 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt){
   return 0;
 
 
-}
-
-
-int send_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn){
-  int numbytes;
-  if( (numbytes = sendto( cn.sockfd, pkt, 48, 0, //48 TODO: make sizeof pkt work
-      (struct sockaddr *)&cn.addr, sizeof( struct sockaddr))) == -1) {
-    fprintf( stderr, "WARNING: error with sending packet");
-    return  1;
-  }
-  printf( "INFO: Sent %d bytes to %s\n", numbytes,
-                          inet_ntoa( cn.addr.sin_addr));
-  return 0;
 }
 
 
