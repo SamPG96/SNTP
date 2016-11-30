@@ -282,11 +282,19 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct cor
 int initialise_connection_to_server(struct client_settings c_settings, struct connection_info *cn){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
+  struct in_addr ipaddr;
 
-  /* resolve server host name or IP address */
-  if( (he = gethostbyname( c_settings.server_host)) == NULL) {
-    fprintf( stderr, "ERROR: initialise_connection_to_server: host not found\n");
-    return 2;
+  if (inet_pton(AF_INET, c_settings.server_host, &ipaddr) != 0){
+    he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET);
+    cn->name = he->h_name;
+  }
+  else{
+    // assume address is a hostname, resolve server host name
+    if( (he = gethostbyname( c_settings.server_host)) == NULL) {
+      fprintf( stderr, "ERROR: initialise_connection_to_server: host not found\n");
+      return 2;
+    }
+    cn->name = c_settings.server_host;
   }
 
   if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -301,9 +309,6 @@ int initialise_connection_to_server(struct client_settings c_settings, struct co
   their_addr.sin_port = htons( c_settings.server_port); /* .. short, netwk byte order */
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
-  // get server hostname, if one exists
-  cn->name = gethostbyaddr((char *)&their_addr.sin_addr, sizeof(
-                          their_addr.sin_addr), their_addr.sin_family)->h_name;
   cn->addr = their_addr;
   return 0;
  }
