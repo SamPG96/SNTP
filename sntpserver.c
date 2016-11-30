@@ -4,7 +4,7 @@
 
 #include "sntpserver.h"
 
-void get_requests(struct connection_info *cn);
+void get_a_request(struct connection_info *cn, struct connection_info *client);
 int initialise_server(struct connection_info *cn);
 
 /*
@@ -16,11 +16,12 @@ int initialise_server(struct connection_info *cn);
 
 int main( void) {
   struct connection_info my_server;
+  struct connection_info client;
 
   initialise_server(&my_server);
 
   while(1){
-    get_requests(&my_server);
+    get_a_request(&my_server, &client);
   }
 
   close_connection(my_server);
@@ -28,19 +29,19 @@ int main( void) {
 }
 
 
-void get_requests(struct connection_info *cn){
+void get_a_request(struct connection_info *cn, struct connection_info *client){
   int addr_len, numbytes;
   char buf[ MAXBUFLEN];
-  struct sockaddr_in their_addr;   /* client's address info */
 
   addr_len = sizeof( struct sockaddr);
   if( (numbytes = recvfrom( cn->sockfd, buf, MAXBUFLEN - 1, 0,
-                (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+                (struct sockaddr *)&client->addr, &addr_len)) == -1) {
       perror( "Listener recvfrom");
       exit( 1);
   }
 
-  printf( "Got packet from %s\n", inet_ntoa( their_addr.sin_addr));
+
+  printf( "Got packet from %s\n", inet_ntoa( client->addr.sin_addr));
   printf( "Packet is %d bytes long\n", numbytes);
   buf[ numbytes] = '\0';  /* end of string */
   printf( "Packet contains \"%s\"\n", buf);
