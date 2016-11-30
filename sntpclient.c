@@ -25,6 +25,7 @@
 
 int main( int argc, char * argv[]) {
   int exit_code;
+  int counter;
   struct client_settings c_settings;
 
   // check cmd line arguments
@@ -35,7 +36,7 @@ int main( int argc, char * argv[]) {
   c_settings = get_client_settings(argc, argv);
 
   // request the time from the server repeat_update_limit amount of times
-  for (int counter = 0; counter < c_settings.repeat_update_limit; counter++){
+  for (counter = 0; counter < c_settings.repeat_update_limit; counter++){
     if ((exit_code = unicast_request(c_settings)) != 0){
       // provide useful output for errors that may occur.
       printf("error sending unicast request - ");
