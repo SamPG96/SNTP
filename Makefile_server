@@ -1,0 +1,5 @@
+sntpserver: sntpserver.c reusedlib.c sntptools.c sntpserver.h reusedlib.h sntptools.h
+	gcc -I./build/include -L./build/lib -Wall sntpserver.c reusedlib.c sntptools.c -o sntpserver -lconfig
+
+clean:
+	rm -f sntpserver
