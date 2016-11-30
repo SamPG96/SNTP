@@ -9,5 +9,5 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define MYPORT 5000        /* the port users connect to */
+#define MYPORT 6001        /* the port users connect to */
 #define MAXBUFLEN 100
