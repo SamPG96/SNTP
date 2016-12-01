@@ -25,13 +25,18 @@ struct client_settings{
   int recv_timeout;   //seconds
   int max_unicast_retries;
   int poll_wait;  // seconds
-  int repeat_update_limit;
+  int timed_repeat_updates_enabled;
+  int timed_repeat_updates_limit;
 };
 
 
 #define CONFIG_FILE "config.cfg"
 
-// max number of retries for trying to get a reply from a unicast server
+/*
+  These defaults can be overwritten by the config file and command line
+*/
+
+// max number of retries for a single unicast request
 #define DEFAULT_MAX_UNICAST_RETRY_LIMIT 2
 // min number of seconds between polling the same server
 #define DEFAULT_MIN_POLL_WAIT 15
@@ -39,8 +44,10 @@ struct client_settings{
 #define DEFAULT_SERVER_PORT 123
 // seconds to wait for a server response
 #define DEFAULT_RECV_TIMEOUT 10
+// whether to enable pr to disable repeated updates
+#define DEFAULT_REPEAT_UPDATES_ENABLED 0
 // the maximum number of occasions to fetch updates of the server time
-#define DEFAULT_REPEAT_UPDATE_LIMIT 3
+#define DEFAULT_REPEAT_UPDATE_LIMIT 4
 
 #define MAXBUFLEN 200
 
@@ -57,6 +64,7 @@ int initialise_connection_to_server(struct client_settings c_settings, struct co
 void print_server_results(struct timeval transmit_time, double offset,
                           double error_bound, struct connection_info cn,
                           int stratum);
+void print_unicast_error(int error_code);
 int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
                         struct core_ts *ts);

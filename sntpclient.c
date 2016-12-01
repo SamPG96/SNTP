@@ -12,7 +12,6 @@
     - handle when no config file is present
     - repeat requests (no less than 1 minute, enforce gap in main)
     - handle kiss-o-death,check client operations in RFC
-    - calculate errorbound
     - CHECK: sanity check: check recieve time is non-zero?
     - CHECK: print to stderr, diff between perror??
     - Add include guards
@@ -28,10 +27,10 @@ int main( int argc, char * argv[]) {
   int counter;
   int s_counter; // number of successful requests
   double offset;
-  double offset_total;
+  double offset_total; // used for average calculation
   double offset_avg;
   double error_bound;
-  double error_bound_total;
+  double error_bound_total; // used for average calculation
   double error_bound_avg;
   struct client_settings c_settings;
 
@@ -42,33 +41,27 @@ int main( int argc, char * argv[]) {
 
   c_settings = get_client_settings(argc, argv);
 
-  // request the time from the server repeat_update_limit amount of times
-  for (counter = 0; counter < c_settings.repeat_update_limit; counter++){
+  // only get the time once if timed repeats updates is disabled
+  if (c_settings.timed_repeat_updates_enabled !=1 ){
     if ((exit_code = unicast_mode(c_settings, &offset, &error_bound)) != 0){
-      // provide useful output for errors that may occur.
-      printf("error sending unicast request - ");
-      switch(exit_code){
-        case 2:
-          printf("unicast server not found\n");
-          break;
-        case 3:
-          printf("failed to create socket to server\n");
-          break;
-        case 4:
-          printf("max number of retries hit\n");
-          break;
-        default:
-          printf("unknown(code=%i)\n", exit_code);
-      }
+      print_unicast_error(exit_code);
     }
-    offset_total += offset;
-    error_bound_total += error_bound;
-    s_counter++; // keep track of succesful requests
   }
-  offset_avg = offset_total / s_counter;
-  error_bound_avg = error_bound_total / s_counter;
-  printf("\nStatistics -> offset average: %f, error bound average: +/- %f\n",
-          offset_avg, error_bound_avg);
+  else{
+    // request the time from the server timed_repeat_updates_limit amount of times
+    for (counter = 0; counter < c_settings.timed_repeat_updates_limit; counter++){
+      if ((exit_code = unicast_mode(c_settings, &offset, &error_bound)) != 0){
+        print_unicast_error(exit_code);
+      }
+      offset_total += offset;
+      error_bound_total += error_bound;
+      s_counter++; // keep track of succesful requests
+    }
+    offset_avg = offset_total / s_counter;
+    error_bound_avg = error_bound_total / s_counter;
+    printf("\nStatistics -> offset average: %f, error bound average: +/- %f\n",
+            offset_avg, error_bound_avg);
+  }
   return 0;
 }
 
@@ -220,7 +213,8 @@ void create_packet(struct ntp_packet *pkt){
 */
 struct client_settings get_client_settings(int argc, char * argv[]){
    int max_unicast_retries;
-   int repeat_update_limit;
+   int repeats_enabled;
+   int timed_repeat_updates_limit;
    int port;
    int poll_wait;
    int recv_timeout;
@@ -264,12 +258,21 @@ struct client_settings get_client_settings(int argc, char * argv[]){
      c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
    }
 
-   // set the maximum number of occasions to fetch updates of the server time.
-   if (config_lookup_int(&cfg, "repeat_update_limit", &repeat_update_limit)){
-     c_settings.repeat_update_limit = repeat_update_limit;
+   // only store the number of repeats if timed repeats are enabled
+   if (config_lookup_bool(&cfg, "timed_repeat_updates_enabled", &repeats_enabled)){
+     c_settings.timed_repeat_updates_enabled = repeats_enabled;
+     if (repeats_enabled == 1){
+       // the maximum number of times to fetch the server time
+       if (config_lookup_int(&cfg, "timed_repeat_updates_limit", &timed_repeat_updates_limit)){
+         c_settings.timed_repeat_updates_limit = timed_repeat_updates_limit;
+       }
+       else{
+         c_settings.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+       }
+     }
    }
    else{
-     c_settings.repeat_update_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+     c_settings.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
    }
 
    return c_settings;
@@ -357,6 +360,24 @@ void print_server_results(struct timeval transmit_time, double offset,
   }
   // output ip address, stratum and no-leap
   printf("%s s%i no-leap\n", inet_ntoa( cn.addr.sin_addr), stratum);
+}
+
+
+void print_unicast_error(int error_code){
+  printf("error sending unicast request - ");
+  switch(error_code){
+    case 2:
+      printf("unicast server not found\n");
+      break;
+    case 3:
+      printf("failed to create socket to server\n");
+      break;
+    case 4:
+      printf("max number of retries hit\n");
+      break;
+    default:
+      printf("unknown(code=%i)\n", error_code);
+  }
 }
 
 
