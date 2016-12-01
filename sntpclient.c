@@ -284,7 +284,8 @@ int get_elapsed_time(struct timeval start_time){
  }
 
 
-void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts ){
+void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
+                                              struct core_ts *ts ){
   struct ntp_time_t originate_timestamp_ntp;
   struct ntp_time_t receive_timestamp_ntp;
   struct ntp_time_t transmit_timestamp_ntp;
@@ -304,7 +305,8 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct cor
 }
 
 
-int initialise_connection_to_server(struct client_settings c_settings, struct connection_info *cn){
+int initialise_connection_to_server(struct client_settings c_settings,
+                                    struct connection_info *cn){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
   struct in_addr ipaddr;
