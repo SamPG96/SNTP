@@ -47,16 +47,19 @@ struct client_settings{
 
 
 double calculate_clock_offset(struct core_ts ts);
+double calculate_error_bound(struct core_ts ts);
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time);
 void create_packet(struct ntp_packet *pkt);
 struct client_settings get_client_settings(int argc, char * argv[]);
 int get_elapsed_time(struct timeval start_time);
 void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts );
 int initialise_connection_to_server(struct client_settings c_settings, struct connection_info *cn );
-void print_server_results(struct core_ts ts, struct connection_info cn, int stratum);
+void print_server_results(struct timeval transmit_time, double offset,
+                          double error_bound, struct connection_info cn,
+                          int stratum);
 int process_cmdline(int argc, char * argv[]);
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
                         struct core_ts *ts);
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt);
 struct timeval start_timer();
-int unicast_request(struct client_settings c_settings);
+int unicast_mode(struct client_settings c_settings, double *offset, double *error_bound);

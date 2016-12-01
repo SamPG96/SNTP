@@ -26,6 +26,13 @@
 int main( int argc, char * argv[]) {
   int exit_code;
   int counter;
+  int s_counter; // number of successful requests
+  double offset;
+  double offset_total;
+  double offset_avg;
+  double error_bound;
+  double error_bound_total;
+  double error_bound_avg;
   struct client_settings c_settings;
 
   // check cmd line arguments
@@ -37,7 +44,7 @@ int main( int argc, char * argv[]) {
 
   // request the time from the server repeat_update_limit amount of times
   for (counter = 0; counter < c_settings.repeat_update_limit; counter++){
-    if ((exit_code = unicast_request(c_settings)) != 0){
+    if ((exit_code = unicast_mode(c_settings, &offset, &error_bound)) != 0){
       // provide useful output for errors that may occur.
       printf("error sending unicast request - ");
       switch(exit_code){
@@ -54,7 +61,14 @@ int main( int argc, char * argv[]) {
           printf("unknown(code=%i)\n", exit_code);
       }
     }
+    offset_total += offset;
+    error_bound_total += error_bound;
+    s_counter++; // keep track of succesful requests
   }
+  offset_avg = offset_total / s_counter;
+  error_bound_avg = error_bound_total / s_counter;
+  printf("\nStatistics -> offset average: %f, error bound average: +/- %f\n",
+          offset_avg, error_bound_avg);
   return 0;
 }
 
@@ -66,7 +80,8 @@ int main( int argc, char * argv[]) {
     3 - cant create socket
     4 - max retry's hit
 */
-int unicast_request(struct client_settings c_settings){
+int unicast_mode(struct client_settings c_settings, double *offset,
+                 double *error_bound){
   struct timeval time_of_prev_request;
   int exit_code;
   int rem_time;
@@ -141,8 +156,10 @@ int unicast_request(struct client_settings c_settings){
   }
 
   get_timestamps_from_packet_in_epoch_time(&reply_pkt, &serv_ts);
-
-  print_server_results(serv_ts, server_connection, reply_pkt.stratum);
+  *offset = calculate_clock_offset(serv_ts);
+  *error_bound = calculate_error_bound(serv_ts);
+  print_server_results(serv_ts.transmit_timestamp, *offset, *error_bound,
+                              server_connection, reply_pkt.stratum);
 
   close_connection(server_connection);
   return 0;
@@ -156,6 +173,16 @@ double calculate_clock_offset(struct core_ts ts){
   double t4 = ts.destination_timestamp.tv_sec + ((double) ts.destination_timestamp.tv_usec / 1000000);
 
   return ((t2 - t1) + (t3 - t4)) / 2;
+}
+
+
+double calculate_error_bound(struct core_ts ts){
+  double t1 = ts.originate_timestamp.tv_sec + ((double) ts.originate_timestamp.tv_usec / 1000000);
+  double t2 = ts.receive_timestamp.tv_sec + ((double) ts.receive_timestamp.tv_usec / 1000000);
+  double t3 = ts.transmit_timestamp.tv_sec + ((double) ts.transmit_timestamp.tv_usec / 1000000);
+  double t4 = ts.destination_timestamp.tv_sec + ((double) ts.destination_timestamp.tv_usec / 1000000);
+
+  return (t4 - t1) - (t3 - t2);
 }
 
 
@@ -312,17 +339,16 @@ int initialise_connection_to_server(struct client_settings c_settings, struct co
  }
 
 
-void print_server_results(struct core_ts ts, struct connection_info cn, int stratum){
+void print_server_results(struct timeval transmit_time, double offset,
+                          double error_bound, struct connection_info cn,
+                          int stratum){
   char *time_str;
-  double offset;
 
-  time_str = convert_epoch_time_to_human_readable(ts.transmit_timestamp);
-  offset = calculate_clock_offset(ts);
-  // TODO: check what (+0000) is
-  // TODO: add errorbound
+  time_str = convert_epoch_time_to_human_readable(transmit_time);
+  // TODO: add timezone for (+0000)
 
   // output timestamp, clock offset and errorbound
-  printf("%s (+0000) %f +/- ERRORBOUND(TODO) ", time_str, offset);
+  printf("%s (+0000) %f +/- %f ", time_str, offset, error_bound);
   // print hostname of the server if one exists
   if (cn.name){
     printf("%s ", cn.name);
