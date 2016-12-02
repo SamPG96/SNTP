@@ -11,7 +11,6 @@
     - repeat requests (no less than 1 minute, enforce gap in main)
     - handle kiss-o-death,check client operations in RFC
     - CHECK: sanity check: check recieve time is non-zero?
-    - CHECK: print to stderr, diff between perror??
     - Add include guards
     - add readme
 */
@@ -279,14 +278,14 @@ int initialise_udp_transfer(struct client_settings c_settings,
   else{
     // assume address is a hostname, resolve server host name
     if( (he = gethostbyname( c_settings.server_host)) == NULL) {
-      fprintf( stderr, "ERROR: initialise_udp_transfer: host not found\n");
+      fprintf( stderr, "ERROR: host not found\n");
       return 2;
     }
     cn->name = c_settings.server_host;
   }
 
   if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    fprintf( stderr, "ERROR: initialise_udp_transfer: error creating socket\n");
+    fprintf( stderr, "ERROR: error creating socket\n");
     return 3;
   }
 

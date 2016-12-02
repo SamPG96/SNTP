@@ -82,7 +82,7 @@ void get_a_request(struct host_info cn, struct sntp_request *c_req){
   addr_len = sizeof( struct sockaddr);
   if( (numbytes = recvfrom( cn.sockfd, &c_req->pkt, MAXBUFLEN - 1, 0,
                 (struct sockaddr *)&c_req->client.addr, &addr_len)) == -1) {
-      perror( "Listener recvfrom");
+      fprintf( stderr, "ERROR: listening on socker");
       exit( 1);
   }
   // store time of request
