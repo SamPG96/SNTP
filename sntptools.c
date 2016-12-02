@@ -15,14 +15,15 @@ struct ntp_time_t get_ntp_time_of_day(){
 }
 
 
-int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr){
+int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
+                     int debug_enabled){
   int numbytes;
   if( (numbytes = sendto( sockfd, pkt, 48, 0, //48 TODO: make sizeof pkt work
       (struct sockaddr *)&addr, sizeof( struct sockaddr))) == -1) {
-    fprintf( stderr, "WARNING: error with sending packet\n");
+    print_debug(debug_enabled, "error with sending packet");
     return  1;
   }
-  printf( "INFO: Sent %d bytes to %s\n", numbytes,
+  print_debug(debug_enabled,"sent %d bytes to %s", numbytes,
                           inet_ntoa( addr.sin_addr));
   return 0;
 }

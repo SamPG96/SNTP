@@ -30,11 +30,26 @@ config_t setup_config_file(char *config_file){
   /* Read the file. If there is an error, report it and exit. */
   if(! config_read_file(&cfg, config_file))
   {
-   fprintf(stderr, "ERROR: error reading config file(%s:%d - %s)\n",
+   fprintf(stderr, "error reading config file(%s:%d - %s)\n",
            config_error_file(&cfg), config_error_line(&cfg),
            config_error_text(&cfg));
    config_destroy(&cfg);
    exit(1); // exit out if there is an issue with the config file
   }
   return cfg;
+}
+
+
+void print_debug(int enable_debug, const char *fmt, ...){
+  char message[4096];
+  va_list args;
+
+  if (enable_debug != 1){
+    return;
+  }
+
+  va_start(args, fmt);
+  vsnprintf(message, sizeof(message), fmt, args);
+  va_end(args);
+  printf("DEBUG: %s\n", message);
 }

@@ -1,9 +1,9 @@
+#include "reusedlib.h" // reused code found online
 #include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include "reusedlib.h" // reused code found online
 
 
 struct ntp_packet {
@@ -28,4 +28,5 @@ struct host_info{
 
 void close_udp_socket(struct host_info cn);
 struct ntp_time_t get_ntp_time_of_day();
-int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr);
+int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
+                     int debug_enabled);

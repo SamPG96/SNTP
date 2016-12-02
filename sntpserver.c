@@ -13,7 +13,6 @@ struct sntp_request{
 struct ntp_packet create_reply_packet(struct sntp_request *c_req);
 void get_a_request(struct host_info cn, struct sntp_request *c_req);
 int initialise_server(struct host_info *cn);
-int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr);
 
 /*
   TODO:
@@ -21,6 +20,7 @@ int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr
     - add config file
     - add getopt
     - check request packet
+    - add supressed output
 */
 
 int main( void) {
@@ -33,7 +33,8 @@ int main( void) {
   while(1){
     get_a_request(my_server, &client_req);
     reply_pkt = create_reply_packet(&client_req);
-    send_SNTP_packet(&reply_pkt, my_server.sockfd, client_req.client.addr);
+    //TODO: replace 1 with debug enabled variable
+    send_SNTP_packet(&reply_pkt, my_server.sockfd, client_req.client.addr, 1);
   }
 
   close_udp_socket(my_server);

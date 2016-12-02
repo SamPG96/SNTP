@@ -6,7 +6,6 @@
 #include "sntpclient.h"
 
 /* TODO:
-    - add option to supress output
     - use getopt
     - repeat requests (no less than 1 minute, enforce gap in main)
     - handle kiss-o-death,check client operations in RFC
@@ -29,25 +28,25 @@ int main( int argc, char * argv[]) {
   double error_bound;
   double error_bound_total; // used for average calculation
   double error_bound_avg;
-  struct client_settings c_settings;
+  struct client_settings c_set;
 
   // check cmd line arguments
   if (process_cmdline(argc, argv) != 0){
     exit(1);
   }
 
-  c_settings = get_client_settings(argc, argv);
+  c_set = get_client_settings(argc, argv);
 
   // only get the time once if timed repeats updates is disabled
-  if (c_settings.timed_repeat_updates_enabled !=1 ){
-    if ((exit_code = unicast_mode(c_settings, &offset, &error_bound)) != 0){
+  if (c_set.timed_repeat_updates_enabled !=1 ){
+    if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
       print_unicast_error(exit_code);
     }
   }
   else{
     // request the time from the server timed_repeat_updates_limit amount of times
-    for (counter = 0; counter < c_settings.timed_repeat_updates_limit; counter++){
-      if ((exit_code = unicast_mode(c_settings, &offset, &error_bound)) != 0){
+    for (counter = 0; counter < c_set.timed_repeat_updates_limit; counter++){
+      if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
         print_unicast_error(exit_code);
       }
       offset_total += offset;
@@ -70,9 +69,10 @@ int main( int argc, char * argv[]) {
     3 - cant create socket
     4 - max retry's hit
 */
-int unicast_mode(struct client_settings c_settings, double *offset,
+int unicast_mode(struct client_settings c_set, double *offset,
                  double *error_bound){
   struct timeval time_of_prev_request;
+  int debug_enabled = c_set.debug_enabled;
   int exit_code;
   int rem_time;
   int retry_count;
@@ -83,7 +83,7 @@ int unicast_mode(struct client_settings c_settings, double *offset,
   struct core_ts serv_ts; // core times
 
   // connect to ntp server
-  if ((exit_code = initialise_udp_transfer(c_settings, &server)) != 0){
+  if ((exit_code = initialise_udp_transfer(c_set, &server)) != 0){
     return exit_code;
   }
 
@@ -95,7 +95,7 @@ int unicast_mode(struct client_settings c_settings, double *offset,
 
   // keep retrying until a valid packet has been identified.
   while (!valid_reply){
-    if (retry_count > c_settings.max_unicast_retries){
+    if (retry_count > c_set.max_unicast_retries){
       // stop trying and return an error
       return 4;
     }
@@ -106,7 +106,7 @@ int unicast_mode(struct client_settings c_settings, double *offset,
        request is sent.
     */
     if (time_of_prev_request.tv_sec != -1 &&
-            get_elapsed_time(time_of_prev_request) <= c_settings.poll_wait){
+            get_elapsed_time(time_of_prev_request) <= c_set.poll_wait){
       continue;
     }
 
@@ -117,28 +117,31 @@ int unicast_mode(struct client_settings c_settings, double *offset,
     time_of_prev_request = start_timer();
 
     // send request packet to server
-    if (send_SNTP_packet(&request_pkt, server.sockfd, server.addr) != 0){
-      rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
-      printf("WARNING: error sending request packet, polling again in %i second(s).\n",
-              (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
+    if (send_SNTP_packet(&request_pkt, server.sockfd, server.addr, debug_enabled) != 0){
+      rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
+      print_debug(debug_enabled, "error sending request packet, polling "
+                  "again in %i second(s).",
+                  (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
       retry_count++;
       continue;
     }
 
     // recieve NTP response packet from server
-    if (recieve_SNTP_packet(&reply_pkt, server, &serv_ts) != 0){
-      rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
-      printf("WARNING: error receiving reply packet, polling again in %i second(s).\n",
-             (rem_time<0)?0:rem_time);
+    if (recieve_SNTP_packet(&reply_pkt, server, &serv_ts, c_set) != 0){
+      rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
+      print_debug(debug_enabled, "error receiving reply packet, polling "
+                  "again in %i second(s).",
+                  (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
     }
 
     // check reply packet is valid and trusted
-    if (run_sanity_checks(request_pkt, reply_pkt) != 0){
-      rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
-      printf("WARNING: error running sanity checks, polling again in %i second(s).\n",
-             (rem_time<0)?0:rem_time);
+    if (run_sanity_checks(request_pkt, reply_pkt, c_set) != 0){
+      rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
+      print_debug(debug_enabled, "error running sanity checks, polling "
+                  "again in %i second(s).",
+                  (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
     }
@@ -209,30 +212,31 @@ void create_packet(struct ntp_packet *pkt){
     - defaults
 */
 struct client_settings get_client_settings(int argc, char * argv[]){
-  struct client_settings c_settings;
+  struct client_settings c_set;
 
   // set all settings to default
-  c_settings.server_port = DEFAULT_SERVER_PORT;
-  c_settings.recv_timeout = DEFAULT_RECV_TIMEOUT;
-  c_settings.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
-  c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
-  c_settings.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
-  c_settings.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+  c_set.server_port = DEFAULT_SERVER_PORT;
+  c_set.debug_enabled = DEFAULT_DEBUG_ENABLED;
+  c_set.recv_timeout = DEFAULT_RECV_TIMEOUT;
+  c_set.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
+  c_set.poll_wait = DEFAULT_MIN_POLL_WAIT;
+  c_set.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
+  c_set.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
 
 
   // host should always come from the commandline
-  c_settings.server_host = argv[1];
+  c_set.server_host = argv[1];
 
   // dont parse config file if it doesnt exist
   if (0 == access(CONFIG_FILE, 0)){
     // update settings from options defined in the config file
-    parse_config_file(&c_settings);
+    parse_config_file(&c_set);
   }
   else{
-    printf("INFO: no config file found for '%s'\n", CONFIG_FILE);
+    print_debug(c_set.debug_enabled, "no config file found for '%s'", CONFIG_FILE);
   }
 
-  return c_settings;
+  return c_set;
  }
 
 
@@ -265,35 +269,35 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
 }
 
 
-int initialise_udp_transfer(struct client_settings c_settings,
+int initialise_udp_transfer(struct client_settings c_set,
                                     struct host_info *cn){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
   struct in_addr ipaddr;
 
-  if (inet_pton(AF_INET, c_settings.server_host, &ipaddr) != 0){
+  if (inet_pton(AF_INET, c_set.server_host, &ipaddr) != 0){
     he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET);
     cn->name = he->h_name;
   }
   else{
     // assume address is a hostname, resolve server host name
-    if( (he = gethostbyname( c_settings.server_host)) == NULL) {
-      fprintf( stderr, "ERROR: host not found\n");
+    if( (he = gethostbyname( c_set.server_host)) == NULL) {
+      print_debug(c_set.debug_enabled, "unicast server not found");
       return 2;
     }
-    cn->name = c_settings.server_host;
+    cn->name = c_set.server_host;
   }
 
   if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    fprintf( stderr, "ERROR: error creating socket\n");
+    print_debug(c_set.debug_enabled,"error creating socket\n");
     return 3;
   }
 
-  set_socket_recvfrom_timeout(cn->sockfd, c_settings.recv_timeout);
+  set_socket_recvfrom_timeout(cn->sockfd, c_set.recv_timeout);
 
   memset( &their_addr,0, sizeof their_addr); /* zero struct */
   their_addr.sin_family = AF_INET;    /* host byte order .. */
-  their_addr.sin_port = htons( c_settings.server_port); /* .. short, netwk byte order */
+  their_addr.sin_port = htons( c_set.server_port); /* .. short, netwk byte order */
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
   cn->addr = their_addr;
@@ -301,46 +305,51 @@ int initialise_udp_transfer(struct client_settings c_settings,
  }
 
 
-void parse_config_file(struct client_settings *c_settings){
+void parse_config_file(struct client_settings *c_set){
   int max_unicast_retries;
   int repeats_enabled;
   int timed_repeat_updates_limit;
   int port;
   int poll_wait;
   int recv_timeout;
+  int debug_enabled;
   config_t cfg;
 
   cfg = setup_config_file(CONFIG_FILE); // get config file options
 
   // set server port
   if (config_lookup_int(&cfg, "server_port", &port)){
-    c_settings->server_port = port;
+    c_set->server_port = port;
   }
 
   // set socket timeout
   if (config_lookup_int(&cfg, "recv_timeout", &recv_timeout)){
-    c_settings->recv_timeout = recv_timeout;
+    c_set->recv_timeout = recv_timeout;
   }
 
   // set max unicast retry limit
   if (config_lookup_int(&cfg, "max_unicast_retries", &max_unicast_retries)){
-    c_settings->max_unicast_retries = max_unicast_retries;
+    c_set->max_unicast_retries = max_unicast_retries;
   }
 
   // set minimum time till polling the same server again
   if (config_lookup_int(&cfg, "poll_wait", &poll_wait)){
-    c_settings->poll_wait = poll_wait;
+    c_set->poll_wait = poll_wait;
   }
 
   // only store the number of repeats if timed repeats are enabled
   if (config_lookup_bool(&cfg, "timed_repeat_updates_enabled", &repeats_enabled)){
-    c_settings->timed_repeat_updates_enabled = repeats_enabled;
+    c_set->timed_repeat_updates_enabled = repeats_enabled;
     if (repeats_enabled == 1){
       // the maximum number of times to fetch the server time
       if (config_lookup_int(&cfg, "timed_repeat_updates_limit", &timed_repeat_updates_limit)){
-        c_settings->timed_repeat_updates_limit = timed_repeat_updates_limit;
+        c_set->timed_repeat_updates_limit = timed_repeat_updates_limit;
       }
     }
+  }
+  // whether or not to produce more detailed output
+  if (config_lookup_bool(&cfg, "debug_enabled", &debug_enabled)){
+    c_set->debug_enabled = debug_enabled;
   }
 }
 
@@ -365,19 +374,19 @@ void print_server_results(struct timeval transmit_time, double offset,
 
 
 void print_unicast_error(int error_code){
-  printf("error sending unicast request - ");
+  char msg_start[50] = "error sending unicast request -";
   switch(error_code){
     case 2:
-      printf("unicast server not found\n");
+      fprintf( stderr,"%s unicast server not found\n", msg_start);
       break;
     case 3:
-      printf("failed to create socket to server\n");
+      fprintf( stderr,"%s failed to create socket to server\n", msg_start);
       break;
     case 4:
-      printf("max number of retries hit\n");
+      fprintf( stderr,"%s max number of retries hit\n", msg_start);
       break;
     default:
-      printf("unknown(code=%i)\n", error_code);
+      fprintf( stderr,"%s unknown(code=%i)\n", msg_start, error_code);
   }
 }
 
@@ -392,7 +401,7 @@ int process_cmdline(int argc, char * argv[]){
 
 
 int recieve_SNTP_packet(struct ntp_packet *pkt, struct host_info cn,
-                        struct core_ts *ts){
+                        struct core_ts *ts, struct client_settings c_set){
   int addr_len;
   int numbytes;
 
@@ -400,20 +409,21 @@ int recieve_SNTP_packet(struct ntp_packet *pkt, struct host_info cn,
   addr_len = sizeof( struct sockaddr);
   if( (numbytes = recvfrom( cn.sockfd, pkt, MAXBUFLEN - 1, 0,
                (struct sockaddr *)&cn.addr, &addr_len)) == -1) {
-    fprintf( stderr, "WARNING: timeout while waiting for server reply\n");
+    print_debug(c_set.debug_enabled, "timeout while waiting for server reply");
     return  1;
   }
   gettimeofday(&ts->destination_timestamp, NULL);
-  printf( "INFO: Got packet from %s\n", inet_ntoa( cn.addr.sin_addr));
-  printf( "INFO: Recieved packet is %d bytes long\n\n", numbytes);
+  print_debug(c_set.debug_enabled, "got packet from %s", inet_ntoa( cn.addr.sin_addr));
   return 0;
 }
 
 
-int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt){
+int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
+                      struct client_settings c_set){
   int rep_mode;
   int rep_version;
   int req_version;
+  char error_msg[50] = "sanity checks failed on -";
 
   rep_mode = rep_pkt.li_vn_mode & 0x7; // extract first 3 bits
   req_version = (req_pkt.li_vn_mode >> 3) & 0x7; // extract bits 3 to 5
@@ -423,27 +433,30 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt){
   // time in the request
   if ((req_pkt.transmit_timestamp.second != rep_pkt.originate_timestamp.second) ||
         (req_pkt.transmit_timestamp.fraction != rep_pkt.originate_timestamp.fraction)){
-    fprintf( stderr, "WARNING: the originate time in the server reply does not "
-             "match the transmit time in the request.\n");
+    print_debug(c_set.debug_enabled, "%s originate time in the server reply does not "
+             "match the transmit time in the request.", error_msg);
     return 1;
   }
 
   // check stratum is in range
   else if (rep_pkt.stratum <= 0 || rep_pkt.stratum > 15){
-    fprintf( stderr, "WARNING: stratum is not in range 1 to 15(stratum=%i)\n", rep_pkt.stratum);
+    print_debug(c_set.debug_enabled, "%s stratum is not in range 1 to 15(stratum=%i)",
+                        error_msg, rep_pkt.stratum);
     return 1;
   }
 
   // transmit time in the reply packet cant be zero
   else if (rep_pkt.transmit_timestamp.second == 0 &&
-                rep_pkt.transmit_timestamp.fraction ==0){
-    fprintf( stderr, "WARNING: transmit time of reply packet is zero");
+                rep_pkt.transmit_timestamp.fraction == 0){
+    print_debug(c_set.debug_enabled, "%s transmit time of reply packet is zero",
+                        error_msg);
     return 1;
   }
 
   // check mode is 4(server)
   else if (rep_mode != 4){
-    fprintf( stderr, "WARNING: mode of reply packet is not server(mode=%i)\n", rep_mode);
+    print_debug(c_set.debug_enabled, "%s mode of reply packet is not server(mode=%i)",
+                        error_msg, rep_mode);
     return 1;
   }
 
@@ -451,7 +464,8 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt){
   // the need to check if the version is non-zero as the client can never
   // be non-zero.
   else if (req_version != rep_version){
-    fprintf( stderr, "WARNING: server should be of the same version as the client\n");
+    print_debug(c_set.debug_enabled, "%s server should be of the same version "
+                        "as the client", error_msg);
     return 1;
   }
 

@@ -1,4 +1,5 @@
 #include "build/include/libconfig.h"
+#include <stdarg.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <stdio.h>
@@ -23,3 +24,6 @@ void set_socket_recvfrom_timeout(int sockfd, int seconds);
 
 // https://github.com/hyperrealm/libconfig/blob/master/examples/c/example1.c
 config_t setup_config_file(char *config_file);
+
+// http://stackoverflow.com/questions/14766040/function-arguments-like-printf-in-c
+void print_debug(int enable_debug, const char *fmt, ...);
