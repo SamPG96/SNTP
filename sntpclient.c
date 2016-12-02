@@ -210,19 +210,19 @@ void create_packet(struct ntp_packet *pkt){
     - defaults
 */
 struct client_settings get_client_settings(int argc, char * argv[]){
-   struct client_settings c_settings;
+  struct client_settings c_settings;
 
-   // set all settings to default
-   c_settings.server_port = DEFAULT_SERVER_PORT;
-   c_settings.recv_timeout = DEFAULT_RECV_TIMEOUT;
-   c_settings.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
-   c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
-   c_settings.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
-   c_settings.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+  // set all settings to default
+  c_settings.server_port = DEFAULT_SERVER_PORT;
+  c_settings.recv_timeout = DEFAULT_RECV_TIMEOUT;
+  c_settings.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
+  c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
+  c_settings.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
+  c_settings.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
 
 
-   // host should always come from the commandline
-   c_settings.server_host = argv[1];
+  // host should always come from the commandline
+  c_settings.server_host = argv[1];
 
   // dont parse config file if it doesnt exist
   if (0 == access(CONFIG_FILE, 0)){
@@ -233,7 +233,7 @@ struct client_settings get_client_settings(int argc, char * argv[]){
     printf("INFO: no config file found for '%s'\n", CONFIG_FILE);
   }
 
-   return c_settings;
+  return c_settings;
  }
 
 
