@@ -8,7 +8,6 @@
 /* TODO:
     - add option to supress output
     - use getopt
-    - handle when no config file is present
     - repeat requests (no less than 1 minute, enforce gap in main)
     - handle kiss-o-death,check client operations in RFC
     - CHECK: sanity check: check recieve time is non-zero?
@@ -225,8 +224,14 @@ struct client_settings get_client_settings(int argc, char * argv[]){
    // host should always come from the commandline
    c_settings.server_host = argv[1];
 
-   // update settings from options defined in the config file
-   parse_config_file(&c_settings);
+  // dont parse config file if it doesnt exist
+  if (0 == access(CONFIG_FILE, 0)){
+    // update settings from options defined in the config file
+    parse_config_file(&c_settings);
+  }
+  else{
+    printf("INFO: no config file found for '%s'\n", CONFIG_FILE);
+  }
 
    return c_settings;
  }
