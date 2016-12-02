@@ -60,13 +60,13 @@ void create_packet(struct ntp_packet *pkt);
 struct client_settings get_client_settings(int argc, char * argv[]);
 int get_elapsed_time(struct timeval start_time);
 void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts );
-int initialise_connection_to_server(struct client_settings c_settings, struct connection_info *cn );
+int initialise_udp_transfer(struct client_settings c_settings, struct host_info *cn );
 void print_server_results(struct timeval transmit_time, double offset,
-                          double error_bound, struct connection_info cn,
+                          double error_bound, struct host_info cn,
                           int stratum);
 void print_unicast_error(int error_code);
 int process_cmdline(int argc, char * argv[]);
-int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
+int recieve_SNTP_packet(struct ntp_packet *pkt, struct host_info cn,
                         struct core_ts *ts);
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt);
 struct timeval start_timer();

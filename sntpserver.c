@@ -5,23 +5,26 @@
 #include "sntpserver.h"
 
 struct sntp_request{
-  struct connection_info client;
+  struct host_info client;
   struct ntp_packet pkt;
   struct ntp_time_t time_of_request;
 };
 
 struct ntp_packet create_reply_packet(struct sntp_request *c_req);
-void get_a_request(struct connection_info cn, struct sntp_request *c_req);
-int initialise_server(struct connection_info *cn);
+void get_a_request(struct host_info cn, struct sntp_request *c_req);
+int initialise_server(struct host_info *cn);
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr);
 
 /*
   TODO:
     - add exit key
+    - add config file
+    - add getopt
+    - check request packet
 */
 
 int main( void) {
-  struct connection_info my_server;
+  struct host_info my_server;
   struct sntp_request client_req;
   struct ntp_packet reply_pkt;
 
@@ -33,7 +36,7 @@ int main( void) {
     send_SNTP_packet(&reply_pkt, my_server.sockfd, client_req.client.addr);
   }
 
-  close_connection(my_server);
+  close_udp_socket(my_server);
   return 0;
 }
 
@@ -72,7 +75,7 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
 }
 
 
-void get_a_request(struct connection_info cn, struct sntp_request *c_req){
+void get_a_request(struct host_info cn, struct sntp_request *c_req){
   int addr_len;
   int numbytes;
 
@@ -90,7 +93,7 @@ void get_a_request(struct connection_info cn, struct sntp_request *c_req){
 }
 
 
-int initialise_server(struct connection_info *cn){
+int initialise_server(struct host_info *cn){
   if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
       fprintf( stderr, "ERROR: cant create a socket");
       return 1;

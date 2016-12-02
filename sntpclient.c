@@ -15,7 +15,7 @@
     - CHECK: sanity check: check recieve time is non-zero?
     - CHECK: print to stderr, diff between perror??
     - Add include guards
-    - check naming, suchas use of connection
+    - add readme
 */
 
 
@@ -80,13 +80,13 @@ int unicast_mode(struct client_settings c_settings, double *offset,
   int rem_time;
   int retry_count;
   int valid_reply;
-  struct connection_info server_connection;
+  struct host_info server;
   struct ntp_packet request_pkt; // request from client to server
   struct ntp_packet reply_pkt; // reply from server to client
   struct core_ts serv_ts; // core times
 
   // connect to ntp server
-  if ((exit_code = initialise_connection_to_server(c_settings, &server_connection)) != 0){
+  if ((exit_code = initialise_udp_transfer(c_settings, &server)) != 0){
     return exit_code;
   }
 
@@ -120,7 +120,7 @@ int unicast_mode(struct client_settings c_settings, double *offset,
     time_of_prev_request = start_timer();
 
     // send request packet to server
-    if (send_SNTP_packet(&request_pkt, server_connection.sockfd, server_connection.addr) != 0){
+    if (send_SNTP_packet(&request_pkt, server.sockfd, server.addr) != 0){
       rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
       printf("WARNING: error sending request packet, polling again in %i second(s).\n",
               (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
@@ -129,7 +129,7 @@ int unicast_mode(struct client_settings c_settings, double *offset,
     }
 
     // recieve NTP response packet from server
-    if (recieve_SNTP_packet(&reply_pkt, server_connection, &serv_ts) != 0){
+    if (recieve_SNTP_packet(&reply_pkt, server, &serv_ts) != 0){
       rem_time = c_settings.poll_wait - get_elapsed_time(time_of_prev_request);
       printf("WARNING: error receiving reply packet, polling again in %i second(s).\n",
              (rem_time<0)?0:rem_time);
@@ -152,9 +152,9 @@ int unicast_mode(struct client_settings c_settings, double *offset,
   *offset = calculate_clock_offset(serv_ts);
   *error_bound = calculate_error_bound(serv_ts);
   print_server_results(serv_ts.transmit_timestamp, *offset, *error_bound,
-                              server_connection, reply_pkt.stratum);
+                              server, reply_pkt.stratum);
 
-  close_connection(server_connection);
+  close_udp_socket(server);
   return 0;
 }
 
@@ -308,8 +308,8 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
 }
 
 
-int initialise_connection_to_server(struct client_settings c_settings,
-                                    struct connection_info *cn){
+int initialise_udp_transfer(struct client_settings c_settings,
+                                    struct host_info *cn){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
   struct in_addr ipaddr;
@@ -321,14 +321,14 @@ int initialise_connection_to_server(struct client_settings c_settings,
   else{
     // assume address is a hostname, resolve server host name
     if( (he = gethostbyname( c_settings.server_host)) == NULL) {
-      fprintf( stderr, "ERROR: initialise_connection_to_server: host not found\n");
+      fprintf( stderr, "ERROR: initialise_udp_transfer: host not found\n");
       return 2;
     }
     cn->name = c_settings.server_host;
   }
 
   if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    fprintf( stderr, "ERROR: initialise_connection_to_server: error creating socket\n");
+    fprintf( stderr, "ERROR: initialise_udp_transfer: error creating socket\n");
     return 3;
   }
 
@@ -345,7 +345,7 @@ int initialise_connection_to_server(struct client_settings c_settings,
 
 
 void print_server_results(struct timeval transmit_time, double offset,
-                          double error_bound, struct connection_info cn,
+                          double error_bound, struct host_info cn,
                           int stratum){
   char *time_str;
 
@@ -390,7 +390,7 @@ int process_cmdline(int argc, char * argv[]){
   }
 
 
-int recieve_SNTP_packet(struct ntp_packet *pkt, struct connection_info cn,
+int recieve_SNTP_packet(struct ntp_packet *pkt, struct host_info cn,
                         struct core_ts *ts){
   int addr_len;
   int numbytes;

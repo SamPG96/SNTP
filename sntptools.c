@@ -1,6 +1,6 @@
 #include "sntptools.h"
 
-void close_connection(struct connection_info cn){
+void close_udp_socket(struct host_info cn){
   close( cn.sockfd);
 }
 
