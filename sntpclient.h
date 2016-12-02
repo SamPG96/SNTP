@@ -61,6 +61,7 @@ struct client_settings get_client_settings(int argc, char * argv[]);
 int get_elapsed_time(struct timeval start_time);
 void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts );
 int initialise_udp_transfer(struct client_settings c_settings, struct host_info *cn );
+void parse_config_file(struct client_settings *c_settings);
 void print_server_results(struct timeval transmit_time, double offset,
                           double error_bound, struct host_info cn,
                           int stratum);

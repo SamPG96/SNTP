@@ -8,7 +8,6 @@
 /* TODO:
     - add option to supress output
     - use getopt
-    - tidy config
     - handle when no config file is present
     - repeat requests (no less than 1 minute, enforce gap in main)
     - handle kiss-o-death,check client operations in RFC
@@ -212,68 +211,22 @@ void create_packet(struct ntp_packet *pkt){
     - defaults
 */
 struct client_settings get_client_settings(int argc, char * argv[]){
-   int max_unicast_retries;
-   int repeats_enabled;
-   int timed_repeat_updates_limit;
-   int port;
-   int poll_wait;
-   int recv_timeout;
    struct client_settings c_settings;
-   config_t cfg;
 
-   cfg = setup_config_file(CONFIG_FILE); // get config file options
+   // set all settings to default
+   c_settings.server_port = DEFAULT_SERVER_PORT;
+   c_settings.recv_timeout = DEFAULT_RECV_TIMEOUT;
+   c_settings.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
+   c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
+   c_settings.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
+   c_settings.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+
 
    // host should always come from the commandline
    c_settings.server_host = argv[1];
 
-   // set server port
-   if (config_lookup_int(&cfg, "server_port", &port)){
-     c_settings.server_port = port;
-   }
-   else{
-     c_settings.server_port = DEFAULT_SERVER_PORT;
-   }
-
-   // set socket timeout
-   if (config_lookup_int(&cfg, "recv_timeout", &recv_timeout)){
-     c_settings.recv_timeout = recv_timeout;
-   }
-   else{
-     c_settings.recv_timeout = DEFAULT_RECV_TIMEOUT;
-   }
-
-   // set max unicast retry limit
-   if (config_lookup_int(&cfg, "max_unicast_retries", &max_unicast_retries)){
-     c_settings.max_unicast_retries = max_unicast_retries;
-   }
-   else{
-     c_settings.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
-   }
-
-   // set minimum time till polling the same server again
-   if (config_lookup_int(&cfg, "poll_wait", &poll_wait)){
-     c_settings.poll_wait = poll_wait;
-   }
-   else{
-     c_settings.poll_wait = DEFAULT_MIN_POLL_WAIT;
-   }
-
-   // only store the number of repeats if timed repeats are enabled
-   if (config_lookup_bool(&cfg, "timed_repeat_updates_enabled", &repeats_enabled)){
-     c_settings.timed_repeat_updates_enabled = repeats_enabled;
-     if (repeats_enabled == 1){
-       // the maximum number of times to fetch the server time
-       if (config_lookup_int(&cfg, "timed_repeat_updates_limit", &timed_repeat_updates_limit)){
-         c_settings.timed_repeat_updates_limit = timed_repeat_updates_limit;
-       }
-       else{
-         c_settings.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
-       }
-     }
-   }
-   else{
-     c_settings.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
-   }
+   // update settings from options defined in the config file
+   parse_config_file(&c_settings);
 
    return c_settings;
  }
@@ -342,6 +295,50 @@ int initialise_udp_transfer(struct client_settings c_settings,
   cn->addr = their_addr;
   return 0;
  }
+
+
+void parse_config_file(struct client_settings *c_settings){
+  int max_unicast_retries;
+  int repeats_enabled;
+  int timed_repeat_updates_limit;
+  int port;
+  int poll_wait;
+  int recv_timeout;
+  config_t cfg;
+
+  cfg = setup_config_file(CONFIG_FILE); // get config file options
+
+  // set server port
+  if (config_lookup_int(&cfg, "server_port", &port)){
+    c_settings->server_port = port;
+  }
+
+  // set socket timeout
+  if (config_lookup_int(&cfg, "recv_timeout", &recv_timeout)){
+    c_settings->recv_timeout = recv_timeout;
+  }
+
+  // set max unicast retry limit
+  if (config_lookup_int(&cfg, "max_unicast_retries", &max_unicast_retries)){
+    c_settings->max_unicast_retries = max_unicast_retries;
+  }
+
+  // set minimum time till polling the same server again
+  if (config_lookup_int(&cfg, "poll_wait", &poll_wait)){
+    c_settings->poll_wait = poll_wait;
+  }
+
+  // only store the number of repeats if timed repeats are enabled
+  if (config_lookup_bool(&cfg, "timed_repeat_updates_enabled", &repeats_enabled)){
+    c_settings->timed_repeat_updates_enabled = repeats_enabled;
+    if (repeats_enabled == 1){
+      // the maximum number of times to fetch the server time
+      if (config_lookup_int(&cfg, "timed_repeat_updates_limit", &timed_repeat_updates_limit)){
+        c_settings->timed_repeat_updates_limit = timed_repeat_updates_limit;
+      }
+    }
+  }
+}
 
 
 void print_server_results(struct timeval transmit_time, double offset,
