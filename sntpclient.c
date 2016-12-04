@@ -276,10 +276,11 @@ int initialise_udp_transfer(struct client_settings c_set,
   struct in_addr ipaddr;
 
   if (inet_pton(AF_INET, c_set.server_host, &ipaddr) != 0){
-    if( (he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET) == NULL)){
+    if( (he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET)) == NULL){
       print_debug(c_set.debug_enabled, "unicast server not found");
       return 2;
     }
+
     cn->name = he->h_name;
   }
   else{
