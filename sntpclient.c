@@ -276,7 +276,10 @@ int initialise_udp_transfer(struct client_settings c_set,
   struct in_addr ipaddr;
 
   if (inet_pton(AF_INET, c_set.server_host, &ipaddr) != 0){
-    he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET);
+    if( (he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET) == NULL)){
+      print_debug(c_set.debug_enabled, "unicast server not found");
+      return 2;
+    }
     cn->name = he->h_name;
   }
   else{
@@ -378,6 +381,7 @@ void print_unicast_error(int error_code){
   switch(error_code){
     case 2:
       fprintf( stderr,"%s unicast server not found\n", msg_start);
+      exit(1);
       break;
     case 3:
       fprintf( stderr,"%s failed to create socket to server\n", msg_start);
