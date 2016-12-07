@@ -42,6 +42,13 @@ int main( int argc, char * argv[]) {
            inet_ntoa(client_req.client.addr.sin_addr));
     convert_unix_time_into_ntp_time(&request_t_unix, &client_req.time_of_request);
 
+    // check the packet to see if its a valid ntp request
+    if (check_packet(client_req, s_set.debug) != 0){
+      fprintf(stderr, "packet check failed, ignoring request for %s\n",
+              inet_ntoa(client_req.client.addr.sin_addr));
+      continue;
+    }
+
     reply_pkt = create_reply_packet(&client_req);
     if (send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr,
                          s_set.debug) == 0){
@@ -54,10 +61,6 @@ int main( int argc, char * argv[]) {
   return 0;
 }
 
-
-//void check_request(struct sntp_request *c_req){
-
-//}
 
 struct ntp_packet create_reply_packet(struct sntp_request *c_req){
   int req_version;
@@ -85,6 +88,27 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
   reply_pkt.transmit_timestamp.second = htonl(transmit_ts_ntp.second);
   reply_pkt.transmit_timestamp.fraction = htonl(transmit_ts_ntp.fraction);
   return reply_pkt;
+}
+
+
+int check_packet(struct sntp_request c_req, int debug){
+  int mode;
+  int vn;
+  char msg_strt[100] = "check failed failed on -";
+
+  mode = c_req.pkt.li_vn_mode & 0x7; // extract first 3 bits
+  vn = (c_req.pkt.li_vn_mode >> 3) & 0x7; // extract bits 3 to 5
+  if (mode != 3){
+    print_debug(debug, "%s packet is not of mode client 3(mode=%i)", msg_strt,
+                mode);
+    return 1;
+  }
+  else if (vn < 1 || vn > 4){
+    print_debug(debug, "%s packet version is not in range 1 to 4(vn=%i)",
+                msg_strt, vn);
+    return 1;
+  }
+  return 0;
 }
 
 

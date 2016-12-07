@@ -26,6 +26,7 @@ struct server_settings{
 
 
 struct ntp_packet create_reply_packet(struct sntp_request *c_req);
+int check_packet(struct sntp_request c_req, int debug);
 struct server_settings get_server_settings(int argc, char * argv[]);
 int initialise_server(int *sockfd, int port, struct host_info *cn, int debug);
 void parse_config_file(struct server_settings *s_set);
