@@ -13,13 +13,17 @@ void convert_unix_time_into_ntp_time(struct timeval *epoch, struct ntp_time_t *n
     ntp->fraction = (uint32_t)( (double)(epoch->tv_usec+1) * (double)(1LL<<32) * 1.0e-6 );
 }
 
-void set_socket_recvfrom_timeout(int sockfd, int seconds){
+int set_socket_recvfrom_timeout(int sockfd, int seconds, int debug){
   struct timeval tv;
 
   tv.tv_sec = seconds;  /* 30 Secs Timeout */
   tv.tv_usec = 0;  // Not init'ing this can cause strange errors
 
-  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
+  if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,
+                 sizeof(struct timeval)) != 0){
+    return 1;
+  }
+  return 0;
 }
 
 config_t setup_config_file(char *config_file){

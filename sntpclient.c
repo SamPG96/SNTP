@@ -114,10 +114,15 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
   struct ntp_packet reply_pkt; // reply from server to client
   struct core_ts serv_ts; // core times
 
+  // setup socket
+  if ((exit_code = initialise_socket(&sockfd, c_set.recv_timeout,
+                                      c_set.debug)) != 0){
+    return exit_code;
+  }
+
   // connect to ntp server
-  if ((exit_code = initialise_udp_transfer(c_set.server_host, c_set.server_port,
-                                          &sockfd, &userver, c_set.debug,
-                                          c_set.recv_timeout)) != 0){
+  if ((exit_code = initialise_server_interface(c_set.server_host, c_set.server_port,
+                                          &userver, c_set.debug)) != 0){
     return exit_code;
   }
 
@@ -264,9 +269,16 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
 
   *s_count = 0;
   print_debug(c_set->debug, "initialising multicast request");
-  if ((exit_code = initialise_udp_transfer(c_set->manycast_address, c_set->server_port,
-                                           &sockfd, &mult_grp, c_set->debug,
-                                           MANYCAST_RECV_TIMEOUT)) != 0){
+
+  // setup socket
+  if ((exit_code = initialise_socket(&sockfd, MANYCAST_RECV_TIMEOUT,
+                                       c_set->debug)) != 0){
+    return exit_code;
+  }
+
+  if ((exit_code = initialise_server_interface(c_set->manycast_address,
+                                               c_set->server_port,
+                                               &mult_grp, c_set->debug)) != 0){
     return exit_code;
   }
 
@@ -392,11 +404,23 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
 }
 
 
-int initialise_udp_transfer(const char *host, int port, int *sockfd,
-                            struct host_info *cn, int debug,
-                            int recv_timeout){
+int initialise_socket(int *sockfd, int recv_timeout, int debug){
+  if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
+    print_debug(debug, "error creating socket\n");
+    return 3;
+  }
+
+  if (set_socket_recvfrom_timeout(*sockfd, recv_timeout, debug) !=0){
+    print_debug(debug, "error setting socket timeout");
+    return 8;
+  }
+  return 0;
+}
+
+
+int initialise_server_interface(const char *host, int port, struct host_info *cn,
+                            int debug){
   struct hostent *he;
-  struct sockaddr_in their_addr;    /* server address info */
   struct in_addr ipaddr;
 
   // check if address given is a ipaddress or hostname and check for existence
@@ -418,19 +442,11 @@ int initialise_udp_transfer(const char *host, int port, int *sockfd,
     cn->name = host;
   }
 
-  if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    print_debug(debug, "error creating socket\n");
-    return 3;
-  }
+  memset( &cn->addr,0, sizeof cn->addr); /* zero struct */
+  cn->addr.sin_family = AF_INET;    /* host byte order .. */
+  cn->addr.sin_port = htons( port); /* .. short, netwk byte order */
+  cn->addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
-  set_socket_recvfrom_timeout(*sockfd, recv_timeout);
-
-  memset( &their_addr,0, sizeof their_addr); /* zero struct */
-  their_addr.sin_family = AF_INET;    /* host byte order .. */
-  their_addr.sin_port = htons( port); /* .. short, netwk byte order */
-  their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
-
-  cn->addr = their_addr;
   return 0;
  }
 
@@ -545,7 +561,10 @@ void print_error_message(int error_code){
       fprintf( stderr, "%s no servers found from manycast query\n", msg_start);
       break;
     case 7:
-      fprintf( stderr, "%s error setting ttl for manycast request\n", msg_start);
+      fprintf( stderr, "%s cant set ttl for manycast request\n", msg_start);
+      break;
+    case 8:
+      fprintf( stderr, "%s cant set recv timeout for socket\n", msg_start);
       break;
     default:
       fprintf( stderr,"%s unknown(code=%i)\n", msg_start, error_code);
