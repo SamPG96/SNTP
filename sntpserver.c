@@ -14,15 +14,19 @@
     - add supressed output
 */
 
-int main( void) {
+int main( int argc, char * argv[]) {
   int sockfd;
   struct host_info my_server;
   struct sntp_request client_req;
   struct ntp_packet reply_pkt;
   struct timeval request_t_unix;
+  struct server_settings s_set;
 
-  initialise_server(&sockfd, &my_server);
-  setup_multicast(sockfd, my_server);
+  s_set = get_server_settings(argc, argv);
+  initialise_server(&sockfd, s_set.server_port, &my_server);
+  if(s_set.manycast_enabled){
+    setup_manycast(sockfd, s_set.manycast_address);
+  }
 
   while(1){
     // TODO: set to debug config option
@@ -80,7 +84,30 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
 }
 
 
-int initialise_server(int *sockfd, struct host_info *cn){
+struct server_settings get_server_settings(int argc, char * argv[]){
+  struct server_settings s_set;
+
+  // set relevant settings to their defaults
+  s_set.server_port = DEFAULT_SERVER_PORT;
+  s_set.debug_enabled = DEFAULT_DEBUG_ENABLED;
+  s_set.manycast_enabled = DEFAULT_MANYCAST_ENABLED;
+  s_set.manycast_address = DEFAULT_MANYCAST_ADDRESS;
+
+  // dont parse config file if it doesnt exist
+  if (0 == access(CONFIG_FILE, 0)){
+    // update settings from options defined in the config file
+    parse_config_file(&s_set);
+  }
+  else{
+    print_debug(s_set.debug_enabled, "no config file found for '%s'", CONFIG_FILE);
+  }
+
+  return s_set;
+ }
+
+
+
+int initialise_server(int *sockfd, int port, struct host_info *cn){
   int optval;
 
   if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -96,7 +123,7 @@ int initialise_server(int *sockfd, struct host_info *cn){
 
   memset( &cn->addr, 0, sizeof( cn->addr));    /* zero struct */
   cn->addr.sin_family = AF_INET;              /* host byte order ... */
-  cn->addr.sin_port = htons( MYPORT); /* ... short, network byte order */
+  cn->addr.sin_port = htons( port); /* ... short, network byte order */
   cn->addr.sin_addr.s_addr = INADDR_ANY;
 
   if( bind( *sockfd, (struct sockaddr *)&cn->addr,
@@ -108,10 +135,42 @@ int initialise_server(int *sockfd, struct host_info *cn){
 }
 
 
-int setup_multicast(int sockfd, struct host_info cn){
+void parse_config_file(struct server_settings *s_set){
+  int port;
+  int debug_enabled;
+  int manycast_enabled;
+  const char *manycast_address;
+  config_t cfg;
+
+  //TODO: Remove if statements
+
+  cfg = setup_config_file(CONFIG_FILE); // get config file options
+
+  if (config_lookup_bool(&cfg, "manycast_enabled", &manycast_enabled)){
+    s_set->manycast_enabled = manycast_enabled;
+  }
+
+  // set the manycast address if manycast is enabled via the commandline
+  if (s_set->manycast_enabled){
+      if (config_lookup_string(&cfg, "manycast_address", &manycast_address)){
+        s_set->manycast_address = manycast_address;
+      }
+  }
+
+  if (config_lookup_int(&cfg, "server_port", &port)){
+    s_set->server_port = port;
+  }
+
+  if (config_lookup_bool(&cfg, "debug_enabled", &debug_enabled)){
+    s_set->debug_enabled = debug_enabled;
+  }
+}
+
+
+int setup_manycast(int sockfd, const char *manycast_address){
   struct ip_mreq multi_req;
 
-  multi_req.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDRESS);
+  multi_req.imr_multiaddr.s_addr = inet_addr(manycast_address);
   multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
   if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
                 sizeof(multi_req)) < 0) {

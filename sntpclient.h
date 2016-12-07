@@ -34,7 +34,7 @@ struct client_settings{
 };
 
 
-#define CONFIG_FILE "config.cfg"
+#define CONFIG_FILE "client_config.cfg"
 
 /*
   These defaults can be overwritten by the config file and command line
