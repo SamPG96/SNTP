@@ -23,7 +23,7 @@ struct client_settings{
   char *server_host;
   int server_port;
   int debug;
-  int recv_timeout;   //seconds
+  int recv_uni_timeout;   //seconds
   int max_unicast_retries;
   int poll_wait;  // seconds
   int timed_repeat_updates_enabled;
@@ -77,7 +77,7 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
                                               struct core_ts *ts );
 int initialise_server_interface(const char *host, int port, struct host_info *cn,
                                 int debug);
-int initialise_socket(int *sockfd, int recv_timeout, int debug);
+int initialise_socket(int *sockfd, int recv_uni_timeout, int debug);
 int is_same_ipaddr(struct sockaddr_in sent_addr, struct sockaddr_in reply_addr);
 void parse_config_file(struct client_settings *c_set);
 void print_debug(int enable_debug, const char *fmt, ...);
@@ -88,4 +88,5 @@ int process_cmdline(int argc, char * argv[]);
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
                       struct client_settings c_set);
 struct timeval start_timer();
-int unicast_mode(struct client_settings c_set, double *offset, double *error_bound);
+int unicast_mode(struct client_settings c_set, double *offset,
+                 double *error_bound, struct timeval *poll_timer);

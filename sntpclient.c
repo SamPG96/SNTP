@@ -31,6 +31,7 @@ int main( int argc, char * argv[]) {
   double error_bound_avg;
   char *ntp_servers[MANYCAST_MAX_SERVERS]; // addresses of available ntp servers
   struct client_settings c_set;
+  struct timeval poll_timer; // tracks time next next poll
 
   s_counter = 0;
   offset_avg = 0;
@@ -60,14 +61,22 @@ int main( int argc, char * argv[]) {
 
   // only get the time once if timed repeat updates is disabled
   if (c_set.timed_repeat_updates_enabled !=1 ){
-    if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
+    if ((exit_code = unicast_mode(c_set, &offset, &error_bound,
+                                  &poll_timer)) != 0){
       print_error_message(exit_code);
     }
   }
   else{
     // request the time from the server timed_repeat_updates_limit amount of times
     for (counter = 0; counter < c_set.timed_repeat_updates_limit; counter++){
-      if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
+      // wait the minimum amount of time to poll again for the next time sample,
+      // unless this is the first request.
+      // note that the timer is started in the function unicast_mode when a
+      // request is sent
+      while (counter != 0 && get_elapsed_time(poll_timer) <= c_set.poll_wait);
+
+      if ((exit_code = unicast_mode(c_set, &offset, &error_bound,
+                                    &poll_timer)) != 0){
         print_error_message(exit_code);
       }
       else{
@@ -99,8 +108,8 @@ int main( int argc, char * argv[]) {
     3 - cant create socket
     4 - max retry's hit
 */
-int unicast_mode(struct client_settings c_set, double *offset, double *error_bound){
-  struct timeval time_of_prev_request;
+int unicast_mode(struct client_settings c_set, double *offset,
+                double *error_bound, struct timeval *poll_timer){
   int sockfd; // client socket
   int debug = c_set.debug;
   int exit_code;
@@ -115,7 +124,7 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
   struct core_ts serv_ts; // core times
 
   // setup socket
-  if ((exit_code = initialise_socket(&sockfd, c_set.recv_timeout,
+  if ((exit_code = initialise_socket(&sockfd, c_set.recv_uni_timeout,
                                       c_set.debug)) != 0){
     return exit_code;
   }
@@ -130,7 +139,7 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
   valid_reply = 0;
   // enforces the loop below to skip the first wait check, as no timer has been
   // set yet.
-  time_of_prev_request.tv_sec = -1;
+  poll_timer->tv_sec = -1;
 
   // keep retrying until a valid packet has been identified.
   while (!valid_reply){
@@ -140,12 +149,12 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
     }
 
     /* enforce a min wait between requests, to avoid getting blocked by ther server.
-       note that the time between requests will be the value of recv_timeout if it
+       note that the time between requests will be the value of recv_uni_timeout if it
        is larger number than poll_wait, as the timer starts before the
        request is sent.
     */
-    if (time_of_prev_request.tv_sec != -1 &&
-            get_elapsed_time(time_of_prev_request) <= c_set.poll_wait){
+    if (poll_timer->tv_sec != -1 &&
+            get_elapsed_time(*poll_timer) <= c_set.poll_wait){
       continue;
     }
 
@@ -153,12 +162,12 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
     create_packet(&request_pkt);
 
     // start timer
-    time_of_prev_request = start_timer();
+    *poll_timer = start_timer();
 
     // send request packet to server
     if (send_SNTP_packet(&request_pkt, sockfd, userver.addr, debug) != 0){
-      rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-      print_debug(debug, "error sending request packet, polling "
+      rem_time = c_set.poll_wait - get_elapsed_time(*poll_timer);
+      print_debug(debug, "error sending request packet, can poll "
                   "again in %i second(s).",
                   (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
       retry_count++;
@@ -172,8 +181,8 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
     do {
       if (recieve_SNTP_packet(sockfd, &reply_pkt, &reply_addr,
                               &serv_ts.destination_timestamp, c_set.debug) != 0){
-        rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-        print_debug(debug, "error receiving reply packet, polling "
+        rem_time = c_set.poll_wait - get_elapsed_time(*poll_timer);
+        print_debug(debug, "error receiving reply packet, can poll "
                     "again in %i second(s).", (rem_time<0)?0:rem_time);
         no_recv_error = 1;
       }
@@ -187,8 +196,8 @@ int unicast_mode(struct client_settings c_set, double *offset, double *error_bou
 
     // check reply packet is valid and trusted
     if (run_sanity_checks(request_pkt, reply_pkt, c_set) != 0){
-      rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-      print_debug(debug, "error running sanity checks, polling "
+      rem_time = c_set.poll_wait - get_elapsed_time(*poll_timer);
+      print_debug(debug, "error running sanity checks, can poll "
                   "again in %i second(s).", (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
@@ -233,7 +242,6 @@ char * convert_epoch_time_to_human_readable(struct timeval epoch_time){
    char time_convertion[35];
 
    readable_time_string = (char*)malloc(35);
-   // TODO: understand more
    ts = *localtime(&epoch_time.tv_sec);
    strftime(time_convertion, sizeof(time_convertion), "%Y-%m-%d %H:%M:%S", &ts);
    sprintf(readable_time_string, "%s.%li", time_convertion, epoch_time.tv_usec);
@@ -345,7 +353,7 @@ struct client_settings get_client_settings(int argc, char * argv[]){
   // set relevant settings to their defaults
   c_set.server_port = DEFAULT_SERVER_PORT;
   c_set.debug = DEFAULT_debug;
-  c_set.recv_timeout = DEFAULT_RECV_TIMEOUT;
+  c_set.recv_uni_timeout = DEFAULT_RECV_TIMEOUT;
   c_set.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
   c_set.poll_wait = DEFAULT_MIN_POLL_WAIT;
   c_set.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
@@ -404,13 +412,13 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
 }
 
 
-int initialise_socket(int *sockfd, int recv_timeout, int debug){
+int initialise_socket(int *sockfd, int recv_uni_timeout, int debug){
   if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
     print_debug(debug, "error creating socket\n");
     return 3;
   }
 
-  if (set_socket_recvfrom_timeout(*sockfd, recv_timeout, debug) !=0){
+  if (set_socket_recvfrom_timeout(*sockfd, recv_uni_timeout, debug) !=0){
     print_debug(debug, "error setting socket timeout");
     return 8;
   }
@@ -467,7 +475,7 @@ void parse_config_file(struct client_settings *c_set){
   int timed_repeat_updates_limit;
   int port;
   int poll_wait;
-  int recv_timeout;
+  int recv_uni_timeout;
   int debug;
   const char *manycast_address;
   int manycast_wait_time;
@@ -492,8 +500,8 @@ void parse_config_file(struct client_settings *c_set){
   }
 
   // set socket timeout
-  if (config_lookup_int(&cfg, "recv_timeout", &recv_timeout)){
-    c_set->recv_timeout = recv_timeout;
+  if (config_lookup_int(&cfg, "recv_uni_timeout", &recv_uni_timeout)){
+    c_set->recv_uni_timeout = recv_uni_timeout;
   }
 
   // set max unicast retry limit
