@@ -264,7 +264,7 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
   print_debug(c_set->debug_enabled, "initialising multicast request");
   if ((exit_code = initialise_udp_transfer(c_set->manycast_address, c_set->server_port,
                                            &sockfd, &mult_grp, c_set->debug_enabled,
-                                           c_set->recv_timeout)) != 0){
+                                           MANYCAST_RECV_TIMEOUT)) != 0){
     return exit_code;
   }
 
@@ -282,7 +282,7 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
   while (get_elapsed_time(timer) <= c_set->manycast_wait_time){
     // listen for a server
     if (recieve_SNTP_packet(sockfd, &reply_pkt, &server, NULL,
-                            MANYCAST_RECV_TIMEOUT) != 0){
+                            c_set->debug_enabled) != 0){
       print_debug(c_set->debug_enabled, "no replys from any server");
       continue;
     }
