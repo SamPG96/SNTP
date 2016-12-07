@@ -196,7 +196,7 @@ int unicast_mode(struct client_settings c_set, double *offset,
   *offset = calculate_clock_offset(serv_ts);
   *error_bound = calculate_error_bound(serv_ts);
   print_server_results(serv_ts.transmit_timestamp, *offset, *error_bound,
-                              server, reply_pkt.stratum);
+                       userver, reply_pkt.stratum);
 
   close(sockfd);
   return 0;
