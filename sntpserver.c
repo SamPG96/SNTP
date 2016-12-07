@@ -40,7 +40,7 @@ int main( void) {
     send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr, 1);
   }
 
-  close_udp_socket(my_server);
+  close(sockfd);
   return 0;
 }
 
