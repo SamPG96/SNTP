@@ -7,11 +7,8 @@
 
 /*
   TODO:
-    - add exit key
-    - add config file
     - add getopt
     - check request packet
-    - add supressed output
 */
 
 int main( int argc, char * argv[]) {
@@ -23,25 +20,33 @@ int main( int argc, char * argv[]) {
   struct server_settings s_set;
 
   s_set = get_server_settings(argc, argv);
-  initialise_server(&sockfd, s_set.server_port, &my_server);
+  if (initialise_server(&sockfd, s_set.server_port, &my_server, s_set.debug_enabled) != 0){
+    fprintf(stderr, "error initialising server");
+    exit(1);
+  }
   if(s_set.manycast_enabled){
-    setup_manycast(sockfd, s_set.manycast_address);
+    if(setup_manycast(sockfd, s_set.manycast_address, s_set.debug_enabled) != 0){
+      fprintf(stderr, "error setting up socket for manycast");
+      exit(1);
+    }
   }
 
   while(1){
-    // TODO: set to debug config option
     if (recieve_SNTP_packet(sockfd, &client_req.pkt, &client_req.client.addr,
-                            &request_t_unix, 1) != 0){
-      fprintf(stderr, "ERROR: while listening");
+                            &request_t_unix, s_set.debug_enabled) != 0){
+      fprintf(stderr, "error while listening for requests");
       continue;
     }
 
+    printf("recieved a packet from %s\n",
+           inet_ntoa(client_req.client.addr.sin_addr));
     convert_unix_time_into_ntp_time(&request_t_unix, &client_req.time_of_request);
 
     reply_pkt = create_reply_packet(&client_req);
-    //TODO: replace 1 with debug enabled variable
-    if (send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr, 1) == 0){
-      printf("succesffuly sent reply packet\n");
+    if (send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr,
+                         s_set.debug_enabled) == 0){
+      printf("succesffuly sent reply packet to %s\n",
+             inet_ntoa(client_req.client.addr.sin_addr));
     }
   }
 
@@ -63,7 +68,6 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
   req_version = (c_req->pkt.li_vn_mode >> 3) & 0x7;
   // set version to the same as the client version and mode to 4(server)
   reply_pkt.li_vn_mode = (req_version << 3) | 4; // (vn << 3) | mode
-  // TODO: check this
   reply_pkt.stratum = 1;
   // copy poll from request
   reply_pkt.poll = c_req->pkt.poll;
@@ -106,18 +110,17 @@ struct server_settings get_server_settings(int argc, char * argv[]){
  }
 
 
-
-int initialise_server(int *sockfd, int port, struct host_info *cn){
+int initialise_server(int *sockfd, int port, struct host_info *cn, int debug_enabled){
   int optval;
 
   if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-      fprintf( stderr, "ERROR: cant create a socket");
+      print_debug(debug_enabled, "error creating a socket");
       return 1;
   }
 
   optval = 1;
   if (setsockopt(*sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
-     fprintf( stderr, "ERROR: Reusing address failed");
+     print_debug( debug_enabled, "error setting up reuseable address");
      return 1;
   }
 
@@ -128,7 +131,7 @@ int initialise_server(int *sockfd, int port, struct host_info *cn){
 
   if( bind( *sockfd, (struct sockaddr *)&cn->addr,
                       sizeof( struct sockaddr)) == -1) {
-       fprintf( stderr, "ERROR: cant bind to socket\n");
+       print_debug( debug_enabled,  "error binding to socket");
        return 1;
   }
   return 0;
@@ -167,14 +170,14 @@ void parse_config_file(struct server_settings *s_set){
 }
 
 
-int setup_manycast(int sockfd, const char *manycast_address){
+int setup_manycast(int sockfd, const char *manycast_address, int debug_enabled){
   struct ip_mreq multi_req;
 
   multi_req.imr_multiaddr.s_addr = inet_addr(manycast_address);
   multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
   if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
                 sizeof(multi_req)) < 0) {
-    perror("setsockopt for multi membership");
+    print_debug(debug_enabled, "unable to setup socket for manycast");
     return 1;
   }
   return 0;

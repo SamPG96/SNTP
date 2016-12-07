@@ -27,9 +27,9 @@ struct server_settings{
 
 struct ntp_packet create_reply_packet(struct sntp_request *c_req);
 struct server_settings get_server_settings(int argc, char * argv[]);
-int initialise_server(int *sockfd, int port, struct host_info *cn);
+int initialise_server(int *sockfd, int port, struct host_info *cn, int debug_enabled);
 void parse_config_file(struct server_settings *s_set);
-int setup_manycast(int sockfd, const char *manycast_address);
+int setup_manycast(int sockfd, const char *manycast_address, int debug_enabled);
 
 
 #define CONFIG_FILE "server_config.cfg"
