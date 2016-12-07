@@ -49,7 +49,7 @@ int main( int argc, char * argv[]) {
     if (exit_code == 0){
       // use the first server that replied for further unicast operations
       c_set.server_host = ntp_servers[0];
-      print_debug(c_set.debug_enabled, "using server '%s' for further unicast "
+      print_debug(c_set.debug, "using server '%s' for further unicast "
                                        "operations", c_set.server_host);
     }
     else{
@@ -99,11 +99,10 @@ int main( int argc, char * argv[]) {
     3 - cant create socket
     4 - max retry's hit
 */
-int unicast_mode(struct client_settings c_set, double *offset,
-                 double *error_bound){
+int unicast_mode(struct client_settings c_set, double *offset, double *error_bound){
   struct timeval time_of_prev_request;
   int sockfd; // client socket
-  int debug_enabled = c_set.debug_enabled;
+  int debug = c_set.debug;
   int exit_code;
   int rem_time;
   int retry_count;
@@ -117,7 +116,7 @@ int unicast_mode(struct client_settings c_set, double *offset,
 
   // connect to ntp server
   if ((exit_code = initialise_udp_transfer(c_set.server_host, c_set.server_port,
-                                          &sockfd, &userver, c_set.debug_enabled,
+                                          &sockfd, &userver, c_set.debug,
                                           c_set.recv_timeout)) != 0){
     return exit_code;
   }
@@ -152,9 +151,9 @@ int unicast_mode(struct client_settings c_set, double *offset,
     time_of_prev_request = start_timer();
 
     // send request packet to server
-    if (send_SNTP_packet(&request_pkt, sockfd, userver.addr, debug_enabled) != 0){
+    if (send_SNTP_packet(&request_pkt, sockfd, userver.addr, debug) != 0){
       rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-      print_debug(debug_enabled, "error sending request packet, polling "
+      print_debug(debug, "error sending request packet, polling "
                   "again in %i second(s).",
                   (rem_time<0)?0:rem_time); // stops rem_time appearing below zero
       retry_count++;
@@ -167,9 +166,9 @@ int unicast_mode(struct client_settings c_set, double *offset,
     no_recv_error = 0;
     do {
       if (recieve_SNTP_packet(sockfd, &reply_pkt, &reply_addr,
-                              &serv_ts.destination_timestamp, c_set.debug_enabled) != 0){
+                              &serv_ts.destination_timestamp, c_set.debug) != 0){
         rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-        print_debug(debug_enabled, "error receiving reply packet, polling "
+        print_debug(debug, "error receiving reply packet, polling "
                     "again in %i second(s).", (rem_time<0)?0:rem_time);
         no_recv_error = 1;
       }
@@ -184,7 +183,7 @@ int unicast_mode(struct client_settings c_set, double *offset,
     // check reply packet is valid and trusted
     if (run_sanity_checks(request_pkt, reply_pkt, c_set) != 0){
       rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-      print_debug(debug_enabled, "error running sanity checks, polling "
+      print_debug(debug, "error running sanity checks, polling "
                   "again in %i second(s).", (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
@@ -261,9 +260,9 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
   struct timeval timer; // use to track amount of time elapsed
 
   *s_count = 0;
-  print_debug(c_set->debug_enabled, "initialising multicast request");
+  print_debug(c_set->debug, "initialising multicast request");
   if ((exit_code = initialise_udp_transfer(c_set->manycast_address, c_set->server_port,
-                                           &sockfd, &mult_grp, c_set->debug_enabled,
+                                           &sockfd, &mult_grp, c_set->debug,
                                            MANYCAST_RECV_TIMEOUT)) != 0){
     return exit_code;
   }
@@ -272,8 +271,8 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
 
   // send an ntp request to the multicast group
   if (send_SNTP_packet(&request_pkt, sockfd, mult_grp.addr,
-                       c_set->debug_enabled) != 0){
-    print_debug(c_set->debug_enabled, "error sending multicast request packet");
+                       c_set->debug) != 0){
+    print_debug(c_set->debug, "error sending multicast request packet");
     return 5;
   }
 
@@ -282,30 +281,30 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
   while (get_elapsed_time(timer) <= c_set->manycast_wait_time){
     // listen for a server
     if (recieve_SNTP_packet(sockfd, &reply_pkt, &server, NULL,
-                            c_set->debug_enabled) != 0){
-      print_debug(c_set->debug_enabled, "no replys from any server");
+                            c_set->debug) != 0){
+      print_debug(c_set->debug, "no replys from any server");
       continue;
     }
 
-    print_debug(c_set->debug_enabled, "server discovered: %s",
+    print_debug(c_set->debug, "server discovered: %s",
                 inet_ntoa( server.sin_addr));
 
     // check the reply packet to test the state/health of the server
     if (run_sanity_checks(request_pkt, reply_pkt, *c_set) != 0){
-      print_debug(c_set->debug_enabled, "server '%s' failed sanity checks, "
+      print_debug(c_set->debug, "server '%s' failed sanity checks, "
                  "discarding server", inet_ntoa( server.sin_addr));
       continue;
     }
 
     ntp_servers[*s_count] = inet_ntoa( server.sin_addr);
     ++*s_count; // inc number of servers found
-    print_debug(c_set->debug_enabled, "server '%s' is approved",
+    print_debug(c_set->debug, "server '%s' is approved",
                 inet_ntoa( server.sin_addr));
   }
 
   // return an error if no servers are found
   if (*s_count == 0){
-    print_debug(c_set->debug_enabled, "no servers found from manycast query");
+    print_debug(c_set->debug, "no servers found from manycast query");
     return 6;
   }
 
@@ -325,7 +324,7 @@ struct client_settings get_client_settings(int argc, char * argv[]){
 
   // set relevant settings to their defaults
   c_set.server_port = DEFAULT_SERVER_PORT;
-  c_set.debug_enabled = DEFAULT_DEBUG_ENABLED;
+  c_set.debug = DEFAULT_debug;
   c_set.recv_timeout = DEFAULT_RECV_TIMEOUT;
   c_set.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
   c_set.poll_wait = DEFAULT_MIN_POLL_WAIT;
@@ -349,7 +348,7 @@ struct client_settings get_client_settings(int argc, char * argv[]){
     parse_config_file(&c_set);
   }
   else{
-    print_debug(c_set.debug_enabled, "no config file found for '%s'", CONFIG_FILE);
+    print_debug(c_set.debug, "no config file found for '%s'", CONFIG_FILE);
   }
 
   return c_set;
@@ -386,7 +385,7 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
 
 
 int initialise_udp_transfer(const char *host, int port, int *sockfd,
-                            struct host_info *cn, int debug_enabled,
+                            struct host_info *cn, int debug,
                             int recv_timeout){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
@@ -396,7 +395,7 @@ int initialise_udp_transfer(const char *host, int port, int *sockfd,
   if (inet_pton(AF_INET, host, &ipaddr) != 0){
     // is ipv4
     if( (he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET)) == NULL){
-      print_debug(debug_enabled, "unicast server not found");
+      print_debug(debug, "unicast server not found");
       return 2;
     }
 
@@ -405,14 +404,14 @@ int initialise_udp_transfer(const char *host, int port, int *sockfd,
   else{
     // assume address is a hostname
     if( (he = gethostbyname( host)) == NULL) {
-      print_debug(debug_enabled, "unicast server not found");
+      print_debug(debug, "unicast server not found");
       return 2;
     }
     cn->name = host;
   }
 
   if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    print_debug(debug_enabled, "error creating socket\n");
+    print_debug(debug, "error creating socket\n");
     return 3;
   }
 
@@ -445,7 +444,7 @@ void parse_config_file(struct client_settings *c_set){
   int port;
   int poll_wait;
   int recv_timeout;
-  int debug_enabled;
+  int debug;
   const char *manycast_address;
   int manycast_wait_time;
   config_t cfg;
@@ -494,8 +493,8 @@ void parse_config_file(struct client_settings *c_set){
     }
   }
   // whether or not to produce more detailed output
-  if (config_lookup_bool(&cfg, "debug_enabled", &debug_enabled)){
-    c_set->debug_enabled = debug_enabled;
+  if (config_lookup_bool(&cfg, "debug", &debug)){
+    c_set->debug = debug;
   }
 }
 
@@ -567,14 +566,14 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
   // time in the request
   if ((req_pkt.transmit_timestamp.second != rep_pkt.originate_timestamp.second) ||
         (req_pkt.transmit_timestamp.fraction != rep_pkt.originate_timestamp.fraction)){
-    print_debug(c_set.debug_enabled, "%s originate time in the server reply does not "
+    print_debug(c_set.debug, "%s originate time in the server reply does not "
              "match the transmit time in the request.", error_msg);
     return 1;
   }
 
   // check stratum is in range
   else if (rep_pkt.stratum <= 0 || rep_pkt.stratum > 15){
-    print_debug(c_set.debug_enabled, "%s stratum is not in range 1 to 15(stratum=%i)",
+    print_debug(c_set.debug, "%s stratum is not in range 1 to 15(stratum=%i)",
                         error_msg, rep_pkt.stratum);
     return 1;
   }
@@ -582,14 +581,14 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
   // transmit time in the reply packet cant be zero
   else if (rep_pkt.transmit_timestamp.second == 0 &&
                 rep_pkt.transmit_timestamp.fraction == 0){
-    print_debug(c_set.debug_enabled, "%s transmit time of reply packet is zero",
+    print_debug(c_set.debug, "%s transmit time of reply packet is zero",
                         error_msg);
     return 1;
   }
 
   // check mode is 4(server)
   else if (rep_mode != 4){
-    print_debug(c_set.debug_enabled, "%s mode of reply packet is not server(mode=%i)",
+    print_debug(c_set.debug, "%s mode of reply packet is not server(mode=%i)",
                         error_msg, rep_mode);
     return 1;
   }
@@ -598,14 +597,14 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
   // the need to check if the version is non-zero as the client can never
   // be non-zero.
   else if (req_version != rep_version){
-    print_debug(c_set.debug_enabled, "%s server should be of the same version "
+    print_debug(c_set.debug, "%s server should be of the same version "
                         "as the client", error_msg);
     return 1;
   }
 
   // TODO: fix this, infinity is defined as 1( stated in the RFC)
 /*  else if (rep_pkt.root_delay >= 0 && rep_pkt.root_delay < 1){
-    fprintf( stderr, "WARNING: root_delay of reply should be >=0 and < 1(root_delay=%i)", rep_pkt.root_delay);
+    print_debug(c_set.debug, "%s root_delay of reply should be >=0 and < 1(root_delay=%i)", rep_pkt.root_delay);
     return 1;
   }
 

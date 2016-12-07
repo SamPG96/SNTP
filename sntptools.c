@@ -13,7 +13,7 @@ struct ntp_time_t get_ntp_time_of_day(){
 
 int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
                         struct sockaddr_in *addr, struct timeval *dest_time,
-                        int debug_enabled){
+                        int debug){
   socklen_t addr_len;
   int numbytes;
 
@@ -21,24 +21,24 @@ int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
   addr_len = sizeof( struct sockaddr);
   if( (numbytes = recvfrom( sockfd, pkt, MAXBUFLEN - 1, 0,
                (struct sockaddr *)addr, &addr_len)) == -1) {
-    print_debug(debug_enabled, "socket recv timeout");
+    print_debug(debug, "socket recv timeout");
     return  1;
   }
   gettimeofday(dest_time, NULL); // store time of packet arrival
-  print_debug(debug_enabled, "got packet from %s", inet_ntoa( addr->sin_addr));
+  print_debug(debug, "got packet from %s", inet_ntoa( addr->sin_addr));
   return 0;
 }
 
 
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
-                     int debug_enabled){
+                     int debug){
   int numbytes;
   if( (numbytes = sendto( sockfd, pkt, 48, 0, //48 TODO: make sizeof pkt work
       (struct sockaddr *)&addr, sizeof( struct sockaddr))) == -1) {
-    print_debug(debug_enabled, "error with sending packet");
+    print_debug(debug, "error with sending packet");
     return  1;
   }
-  print_debug(debug_enabled,"sent %d bytes to %s", numbytes,
+  print_debug(debug,"sent %d bytes to %s", numbytes,
                           inet_ntoa( addr.sin_addr));
   return 0;
 }

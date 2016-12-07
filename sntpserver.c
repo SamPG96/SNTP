@@ -20,12 +20,12 @@ int main( int argc, char * argv[]) {
   struct server_settings s_set;
 
   s_set = get_server_settings(argc, argv);
-  if (initialise_server(&sockfd, s_set.server_port, &my_server, s_set.debug_enabled) != 0){
+  if (initialise_server(&sockfd, s_set.server_port, &my_server, s_set.debug) != 0){
     fprintf(stderr, "error initialising server");
     exit(1);
   }
   if(s_set.manycast_enabled){
-    if(setup_manycast(sockfd, s_set.manycast_address, s_set.debug_enabled) != 0){
+    if(setup_manycast(sockfd, s_set.manycast_address, s_set.debug) != 0){
       fprintf(stderr, "error setting up socket for manycast");
       exit(1);
     }
@@ -33,7 +33,7 @@ int main( int argc, char * argv[]) {
 
   while(1){
     if (recieve_SNTP_packet(sockfd, &client_req.pkt, &client_req.client.addr,
-                            &request_t_unix, s_set.debug_enabled) != 0){
+                            &request_t_unix, s_set.debug) != 0){
       fprintf(stderr, "error while listening for requests");
       continue;
     }
@@ -44,7 +44,7 @@ int main( int argc, char * argv[]) {
 
     reply_pkt = create_reply_packet(&client_req);
     if (send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr,
-                         s_set.debug_enabled) == 0){
+                         s_set.debug) == 0){
       printf("succesffuly sent reply packet to %s\n",
              inet_ntoa(client_req.client.addr.sin_addr));
     }
@@ -93,7 +93,7 @@ struct server_settings get_server_settings(int argc, char * argv[]){
 
   // set relevant settings to their defaults
   s_set.server_port = DEFAULT_SERVER_PORT;
-  s_set.debug_enabled = DEFAULT_DEBUG_ENABLED;
+  s_set.debug = DEFAULT_debug;
   s_set.manycast_enabled = DEFAULT_MANYCAST_ENABLED;
   s_set.manycast_address = DEFAULT_MANYCAST_ADDRESS;
 
@@ -103,24 +103,24 @@ struct server_settings get_server_settings(int argc, char * argv[]){
     parse_config_file(&s_set);
   }
   else{
-    print_debug(s_set.debug_enabled, "no config file found for '%s'", CONFIG_FILE);
+    print_debug(s_set.debug, "no config file found for '%s'", CONFIG_FILE);
   }
 
   return s_set;
  }
 
 
-int initialise_server(int *sockfd, int port, struct host_info *cn, int debug_enabled){
+int initialise_server(int *sockfd, int port, struct host_info *cn, int debug){
   int optval;
 
   if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-      print_debug(debug_enabled, "error creating a socket");
+      print_debug(debug, "error creating a socket");
       return 1;
   }
 
   optval = 1;
   if (setsockopt(*sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
-     print_debug( debug_enabled, "error setting up reuseable address");
+     print_debug( debug, "error setting up reuseable address");
      return 1;
   }
 
@@ -131,7 +131,7 @@ int initialise_server(int *sockfd, int port, struct host_info *cn, int debug_ena
 
   if( bind( *sockfd, (struct sockaddr *)&cn->addr,
                       sizeof( struct sockaddr)) == -1) {
-       print_debug( debug_enabled,  "error binding to socket");
+       print_debug( debug,  "error binding to socket");
        return 1;
   }
   return 0;
@@ -140,7 +140,7 @@ int initialise_server(int *sockfd, int port, struct host_info *cn, int debug_ena
 
 void parse_config_file(struct server_settings *s_set){
   int port;
-  int debug_enabled;
+  int debug;
   int manycast_enabled;
   const char *manycast_address;
   config_t cfg;
@@ -164,20 +164,20 @@ void parse_config_file(struct server_settings *s_set){
     s_set->server_port = port;
   }
 
-  if (config_lookup_bool(&cfg, "debug_enabled", &debug_enabled)){
-    s_set->debug_enabled = debug_enabled;
+  if (config_lookup_bool(&cfg, "debug", &debug)){
+    s_set->debug = debug;
   }
 }
 
 
-int setup_manycast(int sockfd, const char *manycast_address, int debug_enabled){
+int setup_manycast(int sockfd, const char *manycast_address, int debug){
   struct ip_mreq multi_req;
 
   multi_req.imr_multiaddr.s_addr = inet_addr(manycast_address);
   multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
   if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
                 sizeof(multi_req)) < 0) {
-    print_debug(debug_enabled, "unable to setup socket for manycast");
+    print_debug(debug, "unable to setup socket for manycast");
     return 1;
   }
   return 0;
