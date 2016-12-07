@@ -14,7 +14,7 @@ struct ntp_time_t get_ntp_time_of_day(){
 int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
                         struct sockaddr_in *addr, struct timeval *dest_time,
                         int debug_enabled){
-  int addr_len;
+  socklen_t addr_len;
   int numbytes;
 
   memset( pkt, 0, sizeof *pkt );
