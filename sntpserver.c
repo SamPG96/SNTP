@@ -4,15 +4,6 @@
 
 #include "sntpserver.h"
 
-struct sntp_request{
-  struct host_info client;
-  struct ntp_packet pkt;
-  struct ntp_time_t time_of_request;
-};
-
-struct ntp_packet create_reply_packet(struct sntp_request *c_req);
-int initialise_server(int *sockfd, struct host_info *cn);
-int setup_multicast(int sockfd, struct host_info cn);
 
 /*
   TODO:
@@ -89,20 +80,6 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
 }
 
 
-int setup_multicast(int sockfd, struct host_info cn){
-  struct ip_mreq multi_req;
-
-  multi_req.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDRESS);
-  multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
-  if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
-                sizeof(multi_req)) < 0) {
-    perror("setsockopt for multi membership");
-    return 1;
-  }
-  return 0;
-}
-
-
 int initialise_server(int *sockfd, struct host_info *cn){
   int optval;
 
@@ -126,6 +103,20 @@ int initialise_server(int *sockfd, struct host_info *cn){
                       sizeof( struct sockaddr)) == -1) {
        fprintf( stderr, "ERROR: cant bind to socket\n");
        return 1;
+  }
+  return 0;
+}
+
+
+int setup_multicast(int sockfd, struct host_info cn){
+  struct ip_mreq multi_req;
+
+  multi_req.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDRESS);
+  multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
+  if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
+                sizeof(multi_req)) < 0) {
+    perror("setsockopt for multi membership");
+    return 1;
   }
   return 0;
 }
