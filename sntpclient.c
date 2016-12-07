@@ -32,6 +32,10 @@ int main( int argc, char * argv[]) {
   char *ntp_servers[MANYCAST_MAX_SERVERS]; // addresses of available ntp servers
   struct client_settings c_set;
 
+  s_counter = 0;
+  offset_avg = 0;
+  error_bound_avg = 0;
+
   // check cmd line arguments
   if (process_cmdline(argc, argv) != 0){
     exit(1);
@@ -66,14 +70,23 @@ int main( int argc, char * argv[]) {
       if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
         print_error_message(exit_code);
       }
-      offset_total += offset;
-      error_bound_total += error_bound;
-      s_counter++; // keep track of succesful requests
+      else{
+        offset_total += offset;
+        error_bound_total += error_bound;
+        s_counter++; // keep track of succesful requests
+      }
     }
-    offset_avg = offset_total / s_counter;
-    error_bound_avg = error_bound_total / s_counter;
-    printf("\nStatistics -> offset average: %f, error bound average: +/- %f\n",
-            offset_avg, error_bound_avg);
+    // only show statistics if there has been more than zero succesful time
+    // samples collected
+    if (s_counter > 0){
+      offset_avg = offset_total / s_counter;
+      error_bound_avg = error_bound_total / s_counter;
+      printf("\nStatistics -> offset average: %f, error bound average: +/- %f\n",
+              offset_avg, error_bound_avg);
+    }
+    else{
+      fprintf(stderr, "unable to collect any time samples\n");
+    }
   }
   return 0;
 }
