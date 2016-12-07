@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <string.h> // memset
 #include <unistd.h>
 
 
@@ -25,6 +26,13 @@ struct host_info{
   struct sockaddr_in addr;
 };
 
+
+#define MAXBUFLEN 200
+
+
 struct ntp_time_t get_ntp_time_of_day();
+int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
+                        struct sockaddr_in *addr, struct timeval *dest_time,
+                        int debug_enabled);
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
                      int debug_enabled);

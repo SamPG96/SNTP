@@ -11,6 +11,25 @@ struct ntp_time_t get_ntp_time_of_day(){
 }
 
 
+int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
+                        struct sockaddr_in *addr, struct timeval *dest_time,
+                        int debug_enabled){
+  int addr_len;
+  int numbytes;
+
+  memset( pkt, 0, sizeof *pkt );
+  addr_len = sizeof( struct sockaddr);
+  if( (numbytes = recvfrom( sockfd, pkt, MAXBUFLEN - 1, 0,
+               (struct sockaddr *)addr, &addr_len)) == -1) {
+    print_debug(debug_enabled, "socket recv timeout");
+    return  1;
+  }
+  gettimeofday(dest_time, NULL); // store time of packet arrival
+  print_debug(debug_enabled, "got packet from %s", inet_ntoa( addr->sin_addr));
+  return 0;
+}
+
+
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
                      int debug_enabled){
   int numbytes;

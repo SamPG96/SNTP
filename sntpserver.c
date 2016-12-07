@@ -11,9 +11,8 @@ struct sntp_request{
 };
 
 struct ntp_packet create_reply_packet(struct sntp_request *c_req);
-void get_a_request(int sockfd, struct host_info cn, struct sntp_request *c_req);
 int initialise_server(int *sockfd, struct host_info *cn);
-void setup_multicast(int sockfd, struct host_info cn);
+int setup_multicast(int sockfd, struct host_info cn);
 
 /*
   TODO:
@@ -29,15 +28,26 @@ int main( void) {
   struct host_info my_server;
   struct sntp_request client_req;
   struct ntp_packet reply_pkt;
+  struct timeval request_t_unix;
 
   initialise_server(&sockfd, &my_server);
   setup_multicast(sockfd, my_server);
 
   while(1){
-    get_a_request(sockfd, my_server, &client_req);
+    // TODO: set to debug config option
+    if (recieve_SNTP_packet(sockfd, &client_req.pkt, &client_req.client.addr,
+                            &request_t_unix, 1) != 0){
+      fprintf(stderr, "ERROR: while listening");
+      continue;
+    }
+
+    convert_unix_time_into_ntp_time(&request_t_unix, &client_req.time_of_request);
+
     reply_pkt = create_reply_packet(&client_req);
     //TODO: replace 1 with debug enabled variable
-    send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr, 1);
+    if (send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr, 1) == 0){
+      printf("succesffuly sent reply packet\n");
+    }
   }
 
   close(sockfd);
@@ -79,26 +89,7 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
 }
 
 
-void get_a_request(int sockfd, struct host_info cn, struct sntp_request *c_req){
-  int addr_len;
-  int numbytes;
-
-  addr_len = sizeof( struct sockaddr);
-  if( (numbytes = recvfrom( sockfd, &c_req->pkt, MAXBUFLEN - 1, 0,
-                (struct sockaddr *)&c_req->client.addr, &addr_len)) == -1) {
-      fprintf( stderr, "ERROR: listening on socker");
-      exit( 1);
-  }
-  printf("%i\n", c_req->pkt.stratum);
-  // store time of request
-  c_req->time_of_request = get_ntp_time_of_day();
-
-  printf( "Got packet from %s\n", inet_ntoa( c_req->client.addr.sin_addr));
-  printf( "Packet is %d bytes long\n", numbytes);
-}
-
-
-void setup_multicast(int sockfd, struct host_info cn){
+int setup_multicast(int sockfd, struct host_info cn){
   struct ip_mreq multi_req;
 
   multi_req.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDRESS);
@@ -106,8 +97,9 @@ void setup_multicast(int sockfd, struct host_info cn){
   if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
                 sizeof(multi_req)) < 0) {
     perror("setsockopt for multi membership");
-    exit(1);
+    return 1;
   }
+  return 0;
 }
 
 

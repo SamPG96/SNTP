@@ -58,7 +58,6 @@ struct client_settings{
 // the maximum number of occasions to fetch updates of the server time
 #define DEFAULT_REPEAT_UPDATE_LIMIT 4
 
-#define MAXBUFLEN 200
 #define MANYCAST_RECV_TIMEOUT 1
 // the maximum number of servers to store from a manycast request
 #define MANYCAST_MAX_SERVERS 10
@@ -86,9 +85,6 @@ void print_server_results(struct timeval transmit_time, double offset,
                           int stratum);
 void print_error_message(int error_code);
 int process_cmdline(int argc, char * argv[]);
-int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
-                        struct sockaddr_in *addr, struct timeval *dest_time,
-                        int debug_enabled);
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
                       struct client_settings c_set);
 struct timeval start_timer();
