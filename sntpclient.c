@@ -185,8 +185,7 @@ int unicast_mode(struct client_settings c_set, double *offset,
     if (run_sanity_checks(request_pkt, reply_pkt, c_set) != 0){
       rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
       print_debug(debug_enabled, "error running sanity checks, polling "
-                  "again in %i second(s).",
-                  (rem_time<0)?0:rem_time);
+                  "again in %i second(s).", (rem_time<0)?0:rem_time);
       retry_count++;
       continue;
     }
