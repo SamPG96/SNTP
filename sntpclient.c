@@ -258,6 +258,7 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
   struct ntp_packet request_pkt; // request packet to multicast group
   struct ntp_packet reply_pkt; // reply packet from a multicast group server
   struct timeval timer; // use to track amount of time elapsed
+  u_char ttl = 55; // time to live for manycast packets
 
   *s_count = 0;
   print_debug(c_set->debug, "initialising multicast request");
@@ -265,6 +266,11 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
                                            &sockfd, &mult_grp, c_set->debug,
                                            MANYCAST_RECV_TIMEOUT)) != 0){
     return exit_code;
+  }
+
+  if (setsockopt(sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0){
+    print_debug(c_set->debug, "error setting ttl");
+    return 7;
   }
 
   create_packet(&request_pkt);
@@ -535,6 +541,9 @@ void print_error_message(int error_code){
       break;
     case 6:
       fprintf( stderr, "%s no servers found from manycast query\n", msg_start);
+      break;
+    case 7:
+      fprintf( stderr, "%s error setting ttl for manycast request\n", msg_start);
       break;
     default:
       fprintf( stderr,"%s unknown(code=%i)\n", msg_start, error_code);
