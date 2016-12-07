@@ -21,12 +21,12 @@ int main( int argc, char * argv[]) {
 
   s_set = get_server_settings(argc, argv);
   if (initialise_server(&sockfd, s_set.server_port, &my_server, s_set.debug) != 0){
-    fprintf(stderr, "error initialising server");
+    fprintf(stderr, "error initialising server\n");
     exit(1);
   }
   if(s_set.manycast_enabled){
     if(setup_manycast(sockfd, s_set.manycast_address, s_set.debug) != 0){
-      fprintf(stderr, "error setting up socket for manycast");
+      fprintf(stderr, "error setting up socket for manycast\n");
       exit(1);
     }
   }
@@ -34,7 +34,7 @@ int main( int argc, char * argv[]) {
   while(1){
     if (recieve_SNTP_packet(sockfd, &client_req.pkt, &client_req.client.addr,
                             &request_t_unix, s_set.debug) != 0){
-      fprintf(stderr, "error while listening for requests");
+      fprintf(stderr, "error while listening for requests\n");
       continue;
     }
 
