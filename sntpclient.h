@@ -45,7 +45,8 @@ struct client_settings{
 #define DEFAULT_MANYCAST_WAIT_TIME 2
 // max number of retries for a single unicast request
 #define DEFAULT_MAX_UNICAST_RETRY_LIMIT 2
-// min number of seconds between polling the same server
+// min number of seconds between polling the same server, as stated by RFC
+// the client shouldnt poll quicker than this time
 #define DEFAULT_MIN_POLL_WAIT 15
 // server port the client connects to
 #define DEFAULT_SERVER_PORT 123
