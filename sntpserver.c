@@ -11,8 +11,9 @@ struct sntp_request{
 };
 
 struct ntp_packet create_reply_packet(struct sntp_request *c_req);
-void get_a_request(struct host_info cn, struct sntp_request *c_req);
-int initialise_server(struct host_info *cn);
+void get_a_request(int sockfd, struct host_info cn, struct sntp_request *c_req);
+int initialise_server(int *sockfd, struct host_info *cn);
+void setup_multicast(int sockfd, struct host_info cn);
 
 /*
   TODO:
@@ -24,17 +25,19 @@ int initialise_server(struct host_info *cn);
 */
 
 int main( void) {
+  int sockfd;
   struct host_info my_server;
   struct sntp_request client_req;
   struct ntp_packet reply_pkt;
 
-  initialise_server(&my_server);
+  initialise_server(&sockfd, &my_server);
+  setup_multicast(sockfd, my_server);
 
   while(1){
-    get_a_request(my_server, &client_req);
+    get_a_request(sockfd, my_server, &client_req);
     reply_pkt = create_reply_packet(&client_req);
     //TODO: replace 1 with debug enabled variable
-    send_SNTP_packet(&reply_pkt, my_server.sockfd, client_req.client.addr, 1);
+    send_SNTP_packet(&reply_pkt, sockfd, client_req.client.addr, 1);
   }
 
   close_udp_socket(my_server);
@@ -76,16 +79,17 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
 }
 
 
-void get_a_request(struct host_info cn, struct sntp_request *c_req){
+void get_a_request(int sockfd, struct host_info cn, struct sntp_request *c_req){
   int addr_len;
   int numbytes;
 
   addr_len = sizeof( struct sockaddr);
-  if( (numbytes = recvfrom( cn.sockfd, &c_req->pkt, MAXBUFLEN - 1, 0,
+  if( (numbytes = recvfrom( sockfd, &c_req->pkt, MAXBUFLEN - 1, 0,
                 (struct sockaddr *)&c_req->client.addr, &addr_len)) == -1) {
       fprintf( stderr, "ERROR: listening on socker");
       exit( 1);
   }
+  printf("%i\n", c_req->pkt.stratum);
   // store time of request
   c_req->time_of_request = get_ntp_time_of_day();
 
@@ -94,10 +98,31 @@ void get_a_request(struct host_info cn, struct sntp_request *c_req){
 }
 
 
-int initialise_server(struct host_info *cn){
-  if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
+void setup_multicast(int sockfd, struct host_info cn){
+  struct ip_mreq multi_req;
+
+  multi_req.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDRESS);
+  multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
+  if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
+                sizeof(multi_req)) < 0) {
+    perror("setsockopt for multi membership");
+    exit(1);
+  }
+}
+
+
+int initialise_server(int *sockfd, struct host_info *cn){
+  int optval;
+
+  if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
       fprintf( stderr, "ERROR: cant create a socket");
       return 1;
+  }
+
+  optval = 1;
+  if (setsockopt(*sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+     fprintf( stderr, "ERROR: Reusing address failed");
+     return 1;
   }
 
   memset( &cn->addr, 0, sizeof( cn->addr));    /* zero struct */
@@ -105,7 +130,7 @@ int initialise_server(struct host_info *cn){
   cn->addr.sin_port = htons( MYPORT); /* ... short, network byte order */
   cn->addr.sin_addr.s_addr = INADDR_ANY;
 
-  if( bind( cn->sockfd, (struct sockaddr *)&cn->addr,
+  if( bind( *sockfd, (struct sockaddr *)&cn->addr,
                       sizeof( struct sockaddr)) == -1) {
        fprintf( stderr, "ERROR: cant bind to socket\n");
        return 1;

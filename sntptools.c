@@ -1,9 +1,5 @@
 #include "sntptools.h"
 
-void close_udp_socket(struct host_info cn){
-  close( cn.sockfd);
-}
-
 
 struct ntp_time_t get_ntp_time_of_day(){
   struct ntp_time_t ts_ntp;

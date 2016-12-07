@@ -22,12 +22,14 @@ int main( int argc, char * argv[]) {
   int exit_code;
   int counter;
   int s_counter; // number of successful requests
+  int num_available_servers;
   double offset;
   double offset_total; // used for average calculation
   double offset_avg;
   double error_bound;
   double error_bound_total; // used for average calculation
   double error_bound_avg;
+  char *ntp_servers[MANYCAST_MAX_SERVERS]; // addresses of available ntp servers
   struct client_settings c_set;
 
   // check cmd line arguments
@@ -37,17 +39,32 @@ int main( int argc, char * argv[]) {
 
   c_set = get_client_settings(argc, argv);
 
-  // only get the time once if timed repeats updates is disabled
+  if (c_set.manycast_enabled){
+    exit_code = discover_unicast_servers_with_manycast(&c_set, ntp_servers,
+                                                      &num_available_servers);
+    if (exit_code == 0){
+      // use the first server that replied for further unicast operations
+      c_set.server_host = ntp_servers[0];
+      print_debug(c_set.debug_enabled, "using server '%s' for further unicast "
+                                       "operations", c_set.server_host);
+    }
+    else{
+      print_error_message(exit_code);
+      exit(1);
+    }
+  }
+
+  // only get the time once if timed repeat updates is disabled
   if (c_set.timed_repeat_updates_enabled !=1 ){
     if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
-      print_unicast_error(exit_code);
+      print_error_message(exit_code);
     }
   }
   else{
     // request the time from the server timed_repeat_updates_limit amount of times
     for (counter = 0; counter < c_set.timed_repeat_updates_limit; counter++){
       if ((exit_code = unicast_mode(c_set, &offset, &error_bound)) != 0){
-        print_unicast_error(exit_code);
+        print_error_message(exit_code);
       }
       offset_total += offset;
       error_bound_total += error_bound;
@@ -72,18 +89,23 @@ int main( int argc, char * argv[]) {
 int unicast_mode(struct client_settings c_set, double *offset,
                  double *error_bound){
   struct timeval time_of_prev_request;
+  int sockfd; // client socket
   int debug_enabled = c_set.debug_enabled;
   int exit_code;
   int rem_time;
   int retry_count;
   int valid_reply;
-  struct host_info server;
+  int no_recv_error;
+  struct sockaddr_in reply_addr; // address of the server that has sent the packet
+  struct host_info userver; // unicast server to request time from
   struct ntp_packet request_pkt; // request from client to server
   struct ntp_packet reply_pkt; // reply from server to client
   struct core_ts serv_ts; // core times
 
   // connect to ntp server
-  if ((exit_code = initialise_udp_transfer(c_set, &server)) != 0){
+  if ((exit_code = initialise_udp_transfer(c_set.server_host, c_set.server_port,
+                                          &sockfd, &userver, c_set.debug_enabled,
+                                          c_set.recv_timeout)) != 0){
     return exit_code;
   }
 
@@ -117,7 +139,7 @@ int unicast_mode(struct client_settings c_set, double *offset,
     time_of_prev_request = start_timer();
 
     // send request packet to server
-    if (send_SNTP_packet(&request_pkt, server.sockfd, server.addr, debug_enabled) != 0){
+    if (send_SNTP_packet(&request_pkt, sockfd, userver.addr, debug_enabled) != 0){
       rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
       print_debug(debug_enabled, "error sending request packet, polling "
                   "again in %i second(s).",
@@ -126,12 +148,22 @@ int unicast_mode(struct client_settings c_set, double *offset,
       continue;
     }
 
-    // recieve NTP response packet from server
-    if (recieve_SNTP_packet(&reply_pkt, server, &serv_ts, c_set) != 0){
-      rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
-      print_debug(debug_enabled, "error receiving reply packet, polling "
-                  "again in %i second(s).",
-                  (rem_time<0)?0:rem_time);
+    // listen for reply packets, keep listening even if a reply packet has
+    // arrived from a different server than the request was sent to or
+    // until an error occurs
+    no_recv_error = 0;
+    do {
+      if (recieve_SNTP_packet(sockfd, &reply_pkt, &reply_addr,
+                              &serv_ts.destination_timestamp, c_set.debug_enabled) != 0){
+        rem_time = c_set.poll_wait - get_elapsed_time(time_of_prev_request);
+        print_debug(debug_enabled, "error receiving reply packet, polling "
+                    "again in %i second(s).", (rem_time<0)?0:rem_time);
+        no_recv_error = 1;
+      }
+    } while( !(no_recv_error) && is_same_ipaddr(userver.addr, reply_addr));
+
+    // loop again if a recv error occured
+    if (no_recv_error){
       retry_count++;
       continue;
     }
@@ -154,7 +186,7 @@ int unicast_mode(struct client_settings c_set, double *offset,
   print_server_results(serv_ts.transmit_timestamp, *offset, *error_bound,
                               server, reply_pkt.stratum);
 
-  close_udp_socket(server);
+  close(sockfd);
   return 0;
 }
 
@@ -205,6 +237,71 @@ void create_packet(struct ntp_packet *pkt){
  }
 
 
+int discover_unicast_servers_with_manycast(struct client_settings *c_set,
+                                            char *ntp_servers[],
+                                            int *s_count){
+  int exit_code;
+  int sockfd;
+  struct sockaddr_in server; // discovered server
+  struct host_info mult_grp; // multicast group
+  struct ntp_packet request_pkt; // request packet to multicast group
+  struct ntp_packet reply_pkt; // reply packet from a multicast group server
+  struct timeval timer; // use to track amount of time elapsed
+
+  *s_count = 0;
+  print_debug(c_set->debug_enabled, "initialising multicast request");
+  if ((exit_code = initialise_udp_transfer(c_set->manycast_address, c_set->server_port,
+                                           &sockfd, &mult_grp, c_set->debug_enabled,
+                                           c_set->recv_timeout)) != 0){
+    return exit_code;
+  }
+
+  create_packet(&request_pkt);
+
+  // send an ntp request to the multicast group
+  if (send_SNTP_packet(&request_pkt, sockfd, mult_grp.addr,
+                       c_set->debug_enabled) != 0){
+    print_debug(c_set->debug_enabled, "error sending multicast request packet");
+    return 5;
+  }
+
+  timer = start_timer();
+  // gather server replies for a set time
+  while (get_elapsed_time(timer) <= c_set->manycast_wait_time){
+    // listen for a server
+    if (recieve_SNTP_packet(sockfd, &reply_pkt, &server, NULL,
+                            MANYCAST_RECV_TIMEOUT) != 0){
+      print_debug(c_set->debug_enabled, "no replys from any server");
+      continue;
+    }
+
+    print_debug(c_set->debug_enabled, "server discovered: %s",
+                inet_ntoa( server.sin_addr));
+
+    // check the reply packet to test the state/health of the server
+    if (run_sanity_checks(request_pkt, reply_pkt, *c_set) != 0){
+      print_debug(c_set->debug_enabled, "server '%s' failed sanity checks, "
+                 "discarding server", inet_ntoa( server.sin_addr));
+      continue;
+    }
+
+    ntp_servers[*s_count] = inet_ntoa( server.sin_addr);
+    ++*s_count; // inc number of servers found
+    print_debug(c_set->debug_enabled, "server '%s' is approved",
+                inet_ntoa( server.sin_addr));
+  }
+
+  // return an error if no servers are found
+  if (*s_count == 0){
+    print_debug(c_set->debug_enabled, "no servers found from manycast query");
+    return 6;
+  }
+
+  close(sockfd);
+  return 0;
+ }
+
+
 /*
   precedence order(from high to low):
     - commandline
@@ -214,7 +311,7 @@ void create_packet(struct ntp_packet *pkt){
 struct client_settings get_client_settings(int argc, char * argv[]){
   struct client_settings c_set;
 
-  // set all settings to default
+  // set relevant settings to their defaults
   c_set.server_port = DEFAULT_SERVER_PORT;
   c_set.debug_enabled = DEFAULT_DEBUG_ENABLED;
   c_set.recv_timeout = DEFAULT_RECV_TIMEOUT;
@@ -222,10 +319,17 @@ struct client_settings get_client_settings(int argc, char * argv[]){
   c_set.poll_wait = DEFAULT_MIN_POLL_WAIT;
   c_set.timed_repeat_updates_enabled = DEFAULT_REPEAT_UPDATES_ENABLED;
   c_set.timed_repeat_updates_limit = DEFAULT_REPEAT_UPDATE_LIMIT;
+  c_set.manycast_address = DEFAULT_MANYCAST_ADDRESS;
+  c_set.manycast_wait_time = DEFAULT_MANYCAST_WAIT_TIME;
 
-
-  // host should always come from the commandline
-  c_set.server_host = argv[1];
+  // manycast is enabled by default if no hostname/ipaddress is given
+  if (argc == 2){
+      c_set.server_host = argv[1];
+      c_set.manycast_enabled = 0;
+  }
+  else if (argc == 1){
+      c_set.manycast_enabled = 1;
+  }
 
   // dont parse config file if it doesnt exist
   if (0 == access(CONFIG_FILE, 0)){
@@ -269,44 +373,57 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
 }
 
 
-int initialise_udp_transfer(struct client_settings c_set,
-                                    struct host_info *cn){
+int initialise_udp_transfer(const char *host, int port, int *sockfd,
+                            struct host_info *cn, int debug_enabled,
+                            int recv_timeout){
   struct hostent *he;
   struct sockaddr_in their_addr;    /* server address info */
   struct in_addr ipaddr;
 
-  if (inet_pton(AF_INET, c_set.server_host, &ipaddr) != 0){
+  // check if address given is a ipaddress or hostname and check for existence
+  if (inet_pton(AF_INET, host, &ipaddr) != 0){
+    // is ipv4
     if( (he = gethostbyaddr(&ipaddr, sizeof(ipaddr),AF_INET)) == NULL){
-      print_debug(c_set.debug_enabled, "unicast server not found");
+      print_debug(debug_enabled, "unicast server not found");
       return 2;
     }
 
     cn->name = he->h_name;
   }
   else{
-    // assume address is a hostname, resolve server host name
-    if( (he = gethostbyname( c_set.server_host)) == NULL) {
-      print_debug(c_set.debug_enabled, "unicast server not found");
+    // assume address is a hostname
+    if( (he = gethostbyname( host)) == NULL) {
+      print_debug(debug_enabled, "unicast server not found");
       return 2;
     }
-    cn->name = c_set.server_host;
+    cn->name = host;
   }
 
-  if( (cn->sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
-    print_debug(c_set.debug_enabled,"error creating socket\n");
+  if( (*sockfd = socket( AF_INET, SOCK_DGRAM, 0)) == -1) {
+    print_debug(debug_enabled, "error creating socket\n");
     return 3;
   }
 
-  set_socket_recvfrom_timeout(cn->sockfd, c_set.recv_timeout);
+  set_socket_recvfrom_timeout(*sockfd, recv_timeout);
 
   memset( &their_addr,0, sizeof their_addr); /* zero struct */
   their_addr.sin_family = AF_INET;    /* host byte order .. */
-  their_addr.sin_port = htons( c_set.server_port); /* .. short, netwk byte order */
+  their_addr.sin_port = htons( port); /* .. short, netwk byte order */
   their_addr.sin_addr = *((struct in_addr *)he -> h_addr);
 
   cn->addr = their_addr;
   return 0;
  }
+
+
+int is_same_ipaddr(struct sockaddr_in sent_addr, struct sockaddr_in reply_addr){
+  if (strcmp(inet_ntoa(reply_addr.sin_addr), inet_ntoa(sent_addr.sin_addr))){
+    return 1;
+  }
+  else{
+    return 0;
+  }
+}
 
 
 void parse_config_file(struct client_settings *c_set){
@@ -317,9 +434,22 @@ void parse_config_file(struct client_settings *c_set){
   int poll_wait;
   int recv_timeout;
   int debug_enabled;
+  const char *manycast_address;
+  int manycast_wait_time;
   config_t cfg;
 
+
   cfg = setup_config_file(CONFIG_FILE); // get config file options
+
+  // set the manycast address if manycast is enabled via the commandline
+  if (c_set->manycast_enabled){
+      if (config_lookup_string(&cfg, "manycast_address", &manycast_address)){
+        c_set->manycast_address = manycast_address;
+      }
+      if (config_lookup_int(&cfg, "manycast_wait_time", &manycast_wait_time)){
+        c_set->manycast_wait_time = manycast_wait_time;
+      }
+  }
 
   // set server port
   if (config_lookup_int(&cfg, "server_port", &port)){
@@ -377,18 +507,23 @@ void print_server_results(struct timeval transmit_time, double offset,
 }
 
 
-void print_unicast_error(int error_code){
-  char msg_start[50] = "error sending unicast request -";
+void print_error_message(int error_code){
+  char msg_start[50] = "error -";
   switch(error_code){
     case 2:
-      fprintf( stderr,"%s unicast server not found\n", msg_start);
-      exit(1);
+      fprintf( stderr,"%s server not found\n", msg_start);
       break;
     case 3:
-      fprintf( stderr,"%s failed to create socket to server\n", msg_start);
+      fprintf( stderr,"%s failed to create socket\n", msg_start);
       break;
     case 4:
       fprintf( stderr,"%s max number of retries hit\n", msg_start);
+      break;
+    case 5:
+      fprintf( stderr, "%s sending multicast request packet\n", msg_start);
+      break;
+    case 6:
+      fprintf( stderr, "%s no servers found from manycast query\n", msg_start);
       break;
     default:
       fprintf( stderr,"%s unknown(code=%i)\n", msg_start, error_code);
@@ -397,28 +532,29 @@ void print_unicast_error(int error_code){
 
 
 int process_cmdline(int argc, char * argv[]){
-    if( argc != 2) {
-      fprintf( stderr, "usage: %s hostname\n", argv[0]);
+    if( argc != 1 && argc != 2 ) {
+      fprintf( stderr, "usage: %s [HOSTNAME|IPADDRESS]\n", argv[0]);
       return 1;
     }
     return 0;
   }
 
 
-int recieve_SNTP_packet(struct ntp_packet *pkt, struct host_info cn,
-                        struct core_ts *ts, struct client_settings c_set){
+int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
+                        struct sockaddr_in *addr, struct timeval *dest_time,
+                        int debug_enabled){
   int addr_len;
   int numbytes;
 
   memset( pkt, 0, sizeof *pkt );
   addr_len = sizeof( struct sockaddr);
-  if( (numbytes = recvfrom( cn.sockfd, pkt, MAXBUFLEN - 1, 0,
-               (struct sockaddr *)&cn.addr, &addr_len)) == -1) {
-    print_debug(c_set.debug_enabled, "timeout while waiting for server reply");
+  if( (numbytes = recvfrom( sockfd, pkt, MAXBUFLEN - 1, 0,
+               (struct sockaddr *)addr, &addr_len)) == -1) {
+    print_debug(debug_enabled, "socket recv timeout");
     return  1;
   }
-  gettimeofday(&ts->destination_timestamp, NULL);
-  print_debug(c_set.debug_enabled, "got packet from %s", inet_ntoa( cn.addr.sin_addr));
+  gettimeofday(dest_time, NULL); // store time of packet arrival
+  print_debug(debug_enabled, "got packet from %s", inet_ntoa( addr->sin_addr));
   return 0;
 }
 
@@ -428,7 +564,7 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
   int rep_mode;
   int rep_version;
   int req_version;
-  char error_msg[50] = "sanity checks failed on -";
+  char error_msg[100] = "sanity checks failed on -";
 
   rep_mode = rep_pkt.li_vn_mode & 0x7; // extract first 3 bits
   req_version = (req_pkt.li_vn_mode >> 3) & 0x7; // extract bits 3 to 5

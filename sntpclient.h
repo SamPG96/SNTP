@@ -28,6 +28,9 @@ struct client_settings{
   int poll_wait;  // seconds
   int timed_repeat_updates_enabled;
   int timed_repeat_updates_limit;
+  int manycast_enabled;
+  int manycast_wait_time; // seconds
+  const char *manycast_address;
 };
 
 
@@ -36,7 +39,10 @@ struct client_settings{
 /*
   These defaults can be overwritten by the config file and command line
 */
-
+// the manycast address to connect to (not unicast)
+#define DEFAULT_MANYCAST_ADDRESS "224.0.1.1"
+// how long in seconds to collect server responses for
+#define DEFAULT_MANYCAST_WAIT_TIME 2
 // max number of retries for a single unicast request
 #define DEFAULT_MAX_UNICAST_RETRY_LIMIT 2
 // min number of seconds between polling the same server
@@ -53,6 +59,9 @@ struct client_settings{
 #define DEFAULT_REPEAT_UPDATE_LIMIT 4
 
 #define MAXBUFLEN 200
+#define MANYCAST_RECV_TIMEOUT 1
+// the maximum number of servers to store from a manycast request
+#define MANYCAST_MAX_SERVERS 10
 
 
 
@@ -60,19 +69,26 @@ double calculate_clock_offset(struct core_ts ts);
 double calculate_error_bound(struct core_ts ts);
 char * convert_epoch_time_to_human_readable(struct timeval epoch_time);
 void create_packet(struct ntp_packet *pkt);
+int discover_unicast_servers_with_manycast(struct client_settings *c_set,
+                                           char *ntp_servers[],
+                                           int *s_count);
 struct client_settings get_client_settings(int argc, char * argv[]);
 int get_elapsed_time(struct timeval start_time);
 void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt, struct core_ts *ts );
-int initialise_udp_transfer(struct client_settings c_set, struct host_info *cn );
+int initialise_udp_transfer(const char *host, int port, int *sockfd,
+                            struct host_info *cn, int debug_enabled,
+                            int recv_timeout);
+int is_same_ipaddr(struct sockaddr_in sent_addr, struct sockaddr_in reply_addr);
 void parse_config_file(struct client_settings *c_set);
 void print_debug(int enable_debug, const char *fmt, ...);
 void print_server_results(struct timeval transmit_time, double offset,
                           double error_bound, struct host_info cn,
                           int stratum);
-void print_unicast_error(int error_code);
+void print_error_message(int error_code);
 int process_cmdline(int argc, char * argv[]);
-int recieve_SNTP_packet(struct ntp_packet *pkt, struct host_info cn,
-                        struct core_ts *ts, struct client_settings c_set);
+int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
+                        struct sockaddr_in *addr, struct timeval *dest_time,
+                        int debug_enabled);
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
                       struct client_settings c_set);
 struct timeval start_timer();

@@ -21,12 +21,10 @@ struct ntp_packet {
 };
 
 struct host_info{
-  char *name; //hostname
+  const char *name; //hostname
   struct sockaddr_in addr;
-  int sockfd; // the socket that the host is associated with
 };
 
-void close_udp_socket(struct host_info cn);
 struct ntp_time_t get_ntp_time_of_day();
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
                      int debug_enabled);

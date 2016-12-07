@@ -10,4 +10,5 @@
 #include <arpa/inet.h>
 
 #define MYPORT 6001        /* the port users connect to */
+#define MULTICAST_ADDRESS "224.0.1.1"
 #define MAXBUFLEN 100
