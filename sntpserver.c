@@ -67,6 +67,7 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
   struct ntp_time_t transmit_ts_ntp;
   struct ntp_packet reply_pkt;
 
+  memset( &reply_pkt, 0, sizeof reply_pkt ); // zero all fields in struct
   // get request version
   req_version = (c_req->pkt.li_vn_mode >> 3) & 0x7;
   // set version to the same as the client version and mode to 4(server)
@@ -74,8 +75,11 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
   reply_pkt.stratum = 1;
   // copy poll from request
   reply_pkt.poll = c_req->pkt.poll;
-  // TODO: precision, reference timestamp/ref
 
+  // add the precision of system clock
+  reply_pkt.precision = (int)-log2(32);
+
+  // byte converstion not needed as its a stright copy from original packet
   reply_pkt.originate_timestamp.second = c_req->pkt.transmit_timestamp.second;
   reply_pkt.originate_timestamp.fraction = c_req->pkt.transmit_timestamp.fraction;
 

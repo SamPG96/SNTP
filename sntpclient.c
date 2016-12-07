@@ -239,9 +239,11 @@ char * convert_epoch_time_to_human_readable(struct timeval epoch_time){
 void create_packet(struct ntp_packet *pkt){
   struct ntp_time_t transmit_ts_ntp;
 
-  memset( pkt, 0, sizeof *pkt );
+  memset( pkt, 0, sizeof *pkt ); // zero all fields in struct
+
    // set SNTP V4 and Mode 3(client)
   pkt->li_vn_mode = (4 << 3) | 3; // (vn << 3) | mode
+
   transmit_ts_ntp = get_ntp_time_of_day();
   pkt->transmit_timestamp.second =  htonl(transmit_ts_ntp.second);
   pkt->transmit_timestamp.fraction = htonl(transmit_ts_ntp.fraction);

@@ -11,8 +11,8 @@ struct ntp_packet {
   uint8_t li_vn_mode;
   uint8_t stratum;
   uint8_t poll;
-  uint8_t precision;
-  uint32_t root_delay;
+  int8_t  precision;
+  int32_t root_delay;
   uint32_t root_dispersion;
   uint32_t reference_identifier;
   struct ntp_time_t reference_timestamp;
