@@ -167,34 +167,19 @@ int initialise_server(int *sockfd, int port, struct host_info *cn, int debug){
 
 
 void parse_config_file(struct server_settings *s_set){
-  int port;
-  int debug;
-  int manycast_enabled;
-  const char *manycast_address;
   config_t cfg;
-
-  //TODO: Remove if statements
 
   cfg = setup_config_file(CONFIG_FILE); // get config file options
 
-  if (config_lookup_bool(&cfg, "manycast_enabled", &manycast_enabled)){
-    s_set->manycast_enabled = manycast_enabled;
-  }
+  config_lookup_bool(&cfg, "manycast_enabled", &s_set->manycast_enabled);
 
   // set the manycast address if manycast is enabled via the commandline
   if (s_set->manycast_enabled){
-      if (config_lookup_string(&cfg, "manycast_address", &manycast_address)){
-        s_set->manycast_address = manycast_address;
-      }
+      config_lookup_string(&cfg, "manycast_address", &s_set->manycast_address);
   }
 
-  if (config_lookup_int(&cfg, "server_port", &port)){
-    s_set->server_port = port;
-  }
-
-  if (config_lookup_bool(&cfg, "debug", &debug)){
-    s_set->debug = debug;
-  }
+  config_lookup_int(&cfg, "server_port", &s_set->server_port);
+  config_lookup_bool(&cfg, "debug", &s_set->debug);
 }
 
 

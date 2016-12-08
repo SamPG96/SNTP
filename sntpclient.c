@@ -474,64 +474,34 @@ int is_same_ipaddr(struct sockaddr_in sent_addr, struct sockaddr_in reply_addr){
 
 
 void parse_config_file(struct client_settings *c_set){
-  int max_unicast_retries;
-  int repeats_enabled;
-  int timed_repeat_updates_limit;
-  int port;
-  int poll_wait;
-  int recv_uni_timeout;
-  int debug;
-  const char *manycast_address;
-  int manycast_wait_time;
   config_t cfg;
-
 
   cfg = setup_config_file(CONFIG_FILE); // get config file options
 
   // set the manycast address if manycast is enabled via the commandline
   if (c_set->manycast_enabled){
-      if (config_lookup_string(&cfg, "manycast_address", &manycast_address)){
-        c_set->manycast_address = manycast_address;
-      }
-      if (config_lookup_int(&cfg, "manycast_wait_time", &manycast_wait_time)){
-        c_set->manycast_wait_time = manycast_wait_time;
-      }
+      config_lookup_string(&cfg, "manycast_address", &c_set->manycast_address);
+      config_lookup_int(&cfg, "manycast_wait_time", &c_set->manycast_wait_time);
   }
 
-  // set server port
-  if (config_lookup_int(&cfg, "server_port", &port)){
-    c_set->server_port = port;
-  }
-
-  // set socket timeout
-  if (config_lookup_int(&cfg, "recv_uni_timeout", &recv_uni_timeout)){
-    c_set->recv_uni_timeout = recv_uni_timeout;
-  }
-
+  config_lookup_int(&cfg, "server_port", &c_set->server_port);
+  // set unicast socket timeout
+  config_lookup_int(&cfg, "recv_uni_timeout", &c_set->recv_uni_timeout);
   // set max unicast retry limit
-  if (config_lookup_int(&cfg, "max_unicast_retries", &max_unicast_retries)){
-    c_set->max_unicast_retries = max_unicast_retries;
-  }
-
+  config_lookup_int(&cfg, "max_unicast_retries", &c_set->max_unicast_retries);
   // set minimum time till polling the same server again
-  if (config_lookup_int(&cfg, "poll_wait", &poll_wait)){
-    c_set->poll_wait = poll_wait;
-  }
-
+  config_lookup_int(&cfg, "poll_wait", &c_set->poll_wait);
   // only store the number of repeats if timed repeats are enabled
-  if (config_lookup_bool(&cfg, "timed_repeat_updates_enabled", &repeats_enabled)){
-    c_set->timed_repeat_updates_enabled = repeats_enabled;
-    if (repeats_enabled == 1){
+  config_lookup_bool(&cfg, "timed_repeat_updates_enabled",
+                     &c_set->timed_repeat_updates_enabled);
+
+  if (c_set->timed_repeat_updates_enabled == 1){
       // the maximum number of times to fetch the server time
-      if (config_lookup_int(&cfg, "timed_repeat_updates_limit", &timed_repeat_updates_limit)){
-        c_set->timed_repeat_updates_limit = timed_repeat_updates_limit;
-      }
-    }
+      config_lookup_int(&cfg, "timed_repeat_updates_limit",
+                        &c_set->timed_repeat_updates_limit);
   }
   // whether or not to produce more detailed output
-  if (config_lookup_bool(&cfg, "debug", &debug)){
-    c_set->debug = debug;
-  }
+  config_lookup_bool(&cfg, "debug", &c_set->debug);
 }
 
 
