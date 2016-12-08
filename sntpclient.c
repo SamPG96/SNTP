@@ -217,20 +217,24 @@ int unicast_mode(struct client_settings c_set, double *offset,
 
 
 double calculate_clock_offset(struct core_ts ts){
-  double t1 = ts.originate_timestamp.tv_sec + ((double) ts.originate_timestamp.tv_usec / 1000000);
-  double t2 = ts.receive_timestamp.tv_sec + ((double) ts.receive_timestamp.tv_usec / 1000000);
-  double t3 = ts.transmit_timestamp.tv_sec + ((double) ts.transmit_timestamp.tv_usec / 1000000);
-  double t4 = ts.destination_timestamp.tv_sec + ((double) ts.destination_timestamp.tv_usec / 1000000);
+  double t1, t2, t3, t4;
+
+  t1 = ts.originate_timestamp.tv_sec + (1.0e-6 * ts.originate_timestamp.tv_usec);
+  t2 = ts.receive_timestamp.tv_sec + (1.0e-6 * ts.receive_timestamp.tv_usec);
+  t3 = ts.transmit_timestamp.tv_sec + (1.0e-6 * ts.transmit_timestamp.tv_usec);
+  t4 = ts.destination_timestamp.tv_sec + (1.0e-6 * ts.destination_timestamp.tv_usec);
 
   return ((t2 - t1) + (t3 - t4)) / 2;
 }
 
 
 double calculate_error_bound(struct core_ts ts){
-  double t1 = ts.originate_timestamp.tv_sec + ((double) ts.originate_timestamp.tv_usec / 1000000);
-  double t2 = ts.receive_timestamp.tv_sec + ((double) ts.receive_timestamp.tv_usec / 1000000);
-  double t3 = ts.transmit_timestamp.tv_sec + ((double) ts.transmit_timestamp.tv_usec / 1000000);
-  double t4 = ts.destination_timestamp.tv_sec + ((double) ts.destination_timestamp.tv_usec / 1000000);
+  double t1, t2, t3, t4;
+
+  t1 = ts.originate_timestamp.tv_sec + (1.0e-6 * ts.originate_timestamp.tv_usec);
+  t2 = ts.receive_timestamp.tv_sec + (1.0e-6 * ts.receive_timestamp.tv_usec);
+  t3 = ts.transmit_timestamp.tv_sec + (1.0e-6 * ts.transmit_timestamp.tv_usec);
+  t4 = ts.destination_timestamp.tv_sec + (1.0e-6 * ts.destination_timestamp.tv_usec);
 
   return (t4 - t1) - (t3 - t2);
 }
