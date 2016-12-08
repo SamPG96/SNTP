@@ -5,18 +5,6 @@
  */
 #include "sntpclient.h"
 
-/* TODO:
-    - use getopt
-    - repeat requests (no less than 1 minute, enforce gap in main)
-    - handle kiss-o-death,check client operations in RFC
-    - CHECK: sanity check: check recieve time is non-zero?
-    - Add include guards
-    - add readme
-*/
-
-
-
-
 
 int main( int argc, char * argv[]) {
   int exit_code;
@@ -390,7 +378,6 @@ void get_timestamps_from_packet_in_epoch_time(struct ntp_packet *pkt,
   struct ntp_time_t receive_timestamp_ntp;
   struct ntp_time_t transmit_timestamp_ntp;
 
-  //TODO: create another struct like ntp_time to hold unorderd timestamps
   originate_timestamp_ntp.second = ntohl(pkt->originate_timestamp.second);
   originate_timestamp_ntp.fraction = ntohl(pkt->originate_timestamp.fraction);
   convert_ntp_time_into_unix_time(&originate_timestamp_ntp, &ts->originate_timestamp);
@@ -447,7 +434,6 @@ int initialise_server_interface(const char *host, int port, struct host_info *cn
   cn->addr.sin_family = AF_INET;    /* host byte order .. */
   cn->addr.sin_port = htons( port); /* .. short, netwk byte order */
   cn->addr.sin_addr = *((struct in_addr *)he -> h_addr);
-
   return 0;
  }
 
@@ -540,7 +526,6 @@ void print_server_results(struct timeval transmit_time, double offset,
   char *time_str;
 
   time_str = convert_epoch_time_to_human_readable(transmit_time);
-  // TODO: add timezone for (+0000)
 
   // output timestamp, clock offset and errorbound
   printf("%s (+0000) %f +/- %f ", time_str, offset, error_bound);
