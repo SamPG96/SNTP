@@ -619,13 +619,6 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
     return 1;
   }
 
-  // TODO: fix this, infinity is defined as 1( stated in the RFC)
-/*  else if (rep_pkt.root_delay >= 0 && rep_pkt.root_delay < 1){
-    print_debug(c_set.debug, "%s root_delay of reply should be >=0 and < 1(root_delay=%i)", rep_pkt.root_delay);
-    return 1;
-  }
-
-  printf("%f\n", (double)ntohl(rep_pkt.root_delay) / 1000000);*/
   return 0;
 
 
