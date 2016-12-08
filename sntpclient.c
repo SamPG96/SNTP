@@ -589,8 +589,8 @@ int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
   }
 
   // check stratum is in range
-  else if (rep_pkt.stratum <= 0 || rep_pkt.stratum > 15){
-    print_debug(c_set.debug, "%s stratum is not in range 1 to 15(stratum=%i)",
+  else if (rep_pkt.stratum < 0 || rep_pkt.stratum > 15){
+    print_debug(c_set.debug, "%s stratum is not in range 0 to 15(stratum=%i)",
                         error_msg, rep_pkt.stratum);
     return 1;
   }
