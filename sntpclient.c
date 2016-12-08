@@ -268,14 +268,14 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
   int exit_code;
   int sockfd;
   struct sockaddr_in server; // discovered server
-  struct host_info mult_grp; // multicast group
-  struct ntp_packet request_pkt; // request packet to multicast group
-  struct ntp_packet reply_pkt; // reply packet from a multicast group server
+  struct host_info many_grp; // manycast group
+  struct ntp_packet request_pkt; // request packet to manycast group
+  struct ntp_packet reply_pkt; // reply packet from a manycast group server
   struct timeval timer; // use to track amount of time elapsed
   u_char ttl = 55; // time to live for manycast packets
 
   *s_count = 0;
-  print_debug(c_set->debug, "initialising multicast request");
+  print_debug(c_set->debug, "initialising manycast request");
 
   // setup socket
   if ((exit_code = initialise_socket(&sockfd, MANYCAST_RECV_TIMEOUT,
@@ -285,7 +285,7 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
 
   if ((exit_code = initialise_server_interface(c_set->manycast_address,
                                                c_set->server_port,
-                                               &mult_grp, c_set->debug)) != 0){
+                                               &many_grp, c_set->debug)) != 0){
     return exit_code;
   }
 
@@ -296,10 +296,10 @@ int discover_unicast_servers_with_manycast(struct client_settings *c_set,
 
   create_packet(&request_pkt);
 
-  // send an ntp request to the multicast group
-  if (send_SNTP_packet(&request_pkt, sockfd, mult_grp.addr,
+  // send an ntp request to the manycast group
+  if (send_SNTP_packet(&request_pkt, sockfd, many_grp.addr,
                        c_set->debug) != 0){
-    print_debug(c_set->debug, "error sending multicast request packet");
+    print_debug(c_set->debug, "error sending manycast request packet");
     return 5;
   }
 
@@ -351,7 +351,7 @@ struct client_settings get_client_settings(int argc, char * argv[]){
 
   // set relevant settings to their defaults
   c_set.server_port = DEFAULT_SERVER_PORT;
-  c_set.debug = DEFAULT_debug;
+  c_set.debug = DEFAULT_DEBUG;
   c_set.recv_uni_timeout = DEFAULT_RECV_TIMEOUT;
   c_set.max_unicast_retries = DEFAULT_MAX_UNICAST_RETRY_LIMIT;
   c_set.poll_wait = DEFAULT_MIN_POLL_WAIT;
@@ -566,7 +566,7 @@ void print_error_message(int error_code){
       fprintf( stderr,"%s max number of retries hit\n", msg_start);
       break;
     case 5:
-      fprintf( stderr, "%s sending multicast request packet\n", msg_start);
+      fprintf( stderr, "%s sending manycast request packet\n", msg_start);
       break;
     case 6:
       fprintf( stderr, "%s no servers found from manycast query\n", msg_start);

@@ -51,7 +51,7 @@ struct client_settings{
 // server port the client connects to
 #define DEFAULT_SERVER_PORT 123
 // produce more detailed output
-#define DEFAULT_debug 0
+#define DEFAULT_DEBUG 0
 // seconds to wait for a server response
 #define DEFAULT_RECV_TIMEOUT 10
 // whether to enable pr to disable repeated updates
