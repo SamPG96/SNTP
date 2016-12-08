@@ -1,3 +1,6 @@
+/* reuselib.c - used to store code that is not mine but is used
+*/
+
 #include "reusedlib.h"
 
 

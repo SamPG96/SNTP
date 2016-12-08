@@ -1,6 +1,4 @@
-/* talker.c - a datagram 'client'
- * need to supply host name/IP and one word message,
- * e.g. talker localhost hello
+/* sntpclient.c - used to query a server for the time
  *
  */
 #include "sntpclient.h"

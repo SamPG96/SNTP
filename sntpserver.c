@@ -1,5 +1,4 @@
-/* listener.c - a datagram socket 'server'
- * simply displays message received then dies!
+/* sntpserver.c - a server that returns the time
  */
 
 #include "sntpserver.h"
@@ -33,7 +32,7 @@ int main( int argc, char * argv[]) {
     }
 
     printf("recieved a packet from %s\n",
-           inet_ntoa(client_req.client.addr.sin_addr));
+         inet_ntoa(client_req.client.addr.sin_addr));
     convert_unix_time_into_ntp_time(&request_t_unix, &client_req.time_of_request);
 
     // check the packet to see if its a valid ntp request

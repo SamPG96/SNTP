@@ -1,3 +1,6 @@
+/* sntptool.c - used to store common functionality between the server and client
+*/
+
 #include "sntptools.h"
 
 
