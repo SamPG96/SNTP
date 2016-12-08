@@ -79,12 +79,12 @@ int initialise_server_interface(const char *host, int port, struct host_info *cn
                                 int debug);
 int initialise_socket(int *sockfd, int recv_uni_timeout, int debug);
 int is_same_ipaddr(struct sockaddr_in sent_addr, struct sockaddr_in reply_addr);
+void parse_command_line(int argc, char * argv[], struct client_settings *c_set);
 void parse_config_file(struct client_settings *c_set);
 void print_debug(int enable_debug, const char *fmt, ...);
 void print_server_results(struct timeval transmit_time, double offset,
                           double error_bound, struct host_info cn, int stratum);
 void print_error_message(int error_code);
-int process_cmdline(int argc, char * argv[]);
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
                       struct client_settings c_set);
 struct timeval start_timer();

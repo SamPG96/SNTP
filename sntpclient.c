@@ -37,11 +37,6 @@ int main( int argc, char * argv[]) {
   offset_avg = 0;
   error_bound_avg = 0;
 
-  // check cmd line arguments
-  if (process_cmdline(argc, argv) != 0){
-    exit(1);
-  }
-
   c_set = get_client_settings(argc, argv);
 
   if (c_set.manycast_enabled){
@@ -365,15 +360,6 @@ struct client_settings get_client_settings(int argc, char * argv[]){
   c_set.manycast_address = DEFAULT_MANYCAST_ADDRESS;
   c_set.manycast_wait_time = DEFAULT_MANYCAST_WAIT_TIME;
 
-  // manycast is enabled by default if no hostname/ipaddress is given
-  if (argc == 2){
-      c_set.server_host = argv[1];
-      c_set.manycast_enabled = 0;
-  }
-  else if (argc == 1){
-      c_set.manycast_enabled = 1;
-  }
-
   // dont parse config file if it doesnt exist
   if (0 == access(CONFIG_FILE, 0)){
     // update settings from options defined in the config file
@@ -382,6 +368,9 @@ struct client_settings get_client_settings(int argc, char * argv[]){
   else{
     print_debug(c_set.debug, "no config file found for '%s'", CONFIG_FILE);
   }
+
+  // update setting by arguments define din the commandline
+  parse_command_line(argc, argv, &c_set);
 
   return c_set;
  }
@@ -473,16 +462,67 @@ int is_same_ipaddr(struct sockaddr_in sent_addr, struct sockaddr_in reply_addr){
 }
 
 
+void parse_command_line(int argc, char * argv[], struct client_settings *c_set){
+  int many_set;
+  int uni_set;
+  int c;
+
+  uni_set = 0;
+  many_set = 0;
+  while (optind < argc) {
+    if ((c = getopt(argc, argv, "u:mp:dr:")) != -1) {
+      switch(c) {
+        case 'u':
+          c_set->server_host = optarg;
+          uni_set = 1;
+          break;
+
+        case 'm':
+          many_set = 1;
+          c_set->manycast_enabled = 1;
+        //  c_set->manycast_address = optarg;
+          break;
+
+        case 'p':
+          c_set->server_port = atoi(optarg);
+          break;
+
+        case 'd':
+          c_set->debug = 1;
+          break;
+
+        case 'r':
+          c_set->timed_repeat_updates_enabled = 1;
+          c_set->timed_repeat_updates_limit = atoi(optarg);
+          break;
+
+        case '?':
+          if (optopt == 'r'){
+            fprintf(stderr ,"number of repeats not given for option '-r'\n");
+            exit(1);
+          }
+
+        default:
+          abort();
+      }
+    }
+  }
+  if (uni_set && many_set){
+    fprintf(stderr , "%s: unicast address given as well as enabling "
+          "manycast, only one or the other can be chosen\n", argv[0]);
+    exit(1);
+  }
+}
+
+
 void parse_config_file(struct client_settings *c_set){
   config_t cfg;
 
   cfg = setup_config_file(CONFIG_FILE); // get config file options
 
   // set the manycast address if manycast is enabled via the commandline
-  if (c_set->manycast_enabled){
-      config_lookup_string(&cfg, "manycast_address", &c_set->manycast_address);
-      config_lookup_int(&cfg, "manycast_wait_time", &c_set->manycast_wait_time);
-  }
+  config_lookup_string(&cfg, "manycast_address", &c_set->manycast_address);
+  config_lookup_int(&cfg, "manycast_wait_time", &c_set->manycast_wait_time);
 
   config_lookup_int(&cfg, "server_port", &c_set->server_port);
   // set unicast socket timeout
@@ -491,17 +531,6 @@ void parse_config_file(struct client_settings *c_set){
   config_lookup_int(&cfg, "max_unicast_retries", &c_set->max_unicast_retries);
   // set minimum time till polling the same server again
   config_lookup_int(&cfg, "poll_wait", &c_set->poll_wait);
-  // only store the number of repeats if timed repeats are enabled
-  config_lookup_bool(&cfg, "timed_repeat_updates_enabled",
-                     &c_set->timed_repeat_updates_enabled);
-
-  if (c_set->timed_repeat_updates_enabled == 1){
-      // the maximum number of times to fetch the server time
-      config_lookup_int(&cfg, "timed_repeat_updates_limit",
-                        &c_set->timed_repeat_updates_limit);
-  }
-  // whether or not to produce more detailed output
-  config_lookup_bool(&cfg, "debug", &c_set->debug);
 }
 
 
@@ -552,15 +581,6 @@ void print_error_message(int error_code){
       fprintf( stderr,"%s unknown(code=%i)\n", msg_start, error_code);
   }
 }
-
-
-int process_cmdline(int argc, char * argv[]){
-    if( argc != 1 && argc != 2 ) {
-      fprintf( stderr, "usage: %s [HOSTNAME|IPADDRESS]\n", argv[0]);
-      return 1;
-    }
-    return 0;
-  }
 
 
 int run_sanity_checks(struct ntp_packet req_pkt, struct ntp_packet rep_pkt,
