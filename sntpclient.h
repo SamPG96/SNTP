@@ -54,9 +54,11 @@ struct client_settings{
 #define DEFAULT_DEBUG 0
 // seconds to wait for a server response
 #define DEFAULT_RECV_TIMEOUT 10
-// whether to enable pr to disable repeated updates
+// when enabled the time is fetched multiple times from the same server and
+// an average of the offset and error bound is shown
 #define DEFAULT_REPEAT_UPDATES_ENABLED 0
-// the maximum number of occasions to fetch updates of the server time
+// the maximum number of times to fetch the server time. note the higher the
+// value here, the greater accuracy of average clock offset and error bound
 #define DEFAULT_REPEAT_UPDATE_LIMIT 4
 
 #define MANYCAST_RECV_TIMEOUT 1
