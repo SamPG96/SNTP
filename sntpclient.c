@@ -248,7 +248,7 @@ char * convert_epoch_time_to_human_readable(struct timeval epoch_time){
    readable_time_string = (char*)malloc(35);
    ts = *localtime(&epoch_time.tv_sec);
    strftime(time_convertion, sizeof(time_convertion), "%Y-%m-%d %H:%M:%S", &ts);
-   sprintf(readable_time_string, "%s.%li", time_convertion, epoch_time.tv_usec);
+   sprintf(readable_time_string, "%s.%06li", time_convertion, epoch_time.tv_usec);
    return (char *)readable_time_string;
  }
 
