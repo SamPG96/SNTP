@@ -5,12 +5,6 @@
 #include "sntpserver.h"
 
 
-/*
-  TODO:
-    - add getopt
-    - check request packet
-*/
-
 int main( int argc, char * argv[]) {
   int sockfd;
   struct host_info my_server;
@@ -72,7 +66,7 @@ struct ntp_packet create_reply_packet(struct sntp_request *c_req){
   req_version = (c_req->pkt.li_vn_mode >> 3) & 0x7;
   // set version to the same as the client version and mode to 4(server)
   reply_pkt.li_vn_mode = (req_version << 3) | 4; // (vn << 3) | mode
-  reply_pkt.stratum = 1;
+  reply_pkt.stratum = 2;
   // copy poll from request
   reply_pkt.poll = c_req->pkt.poll;
 
@@ -184,12 +178,12 @@ void parse_config_file(struct server_settings *s_set){
 
 
 int setup_manycast(int sockfd, const char *manycast_address, int debug){
-  struct ip_mreq multi_req;
+  struct ip_mreq many_req;
 
-  multi_req.imr_multiaddr.s_addr = inet_addr(manycast_address);
-  multi_req.imr_interface.s_addr = htonl(INADDR_ANY);
-  if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multi_req,
-                sizeof(multi_req)) < 0) {
+  many_req.imr_multiaddr.s_addr = inet_addr(manycast_address);
+  many_req.imr_interface.s_addr = htonl(INADDR_ANY);
+  if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &many_req,
+                sizeof(many_req)) < 0) {
     print_debug(debug, "unable to setup socket for manycast");
     return 1;
   }
