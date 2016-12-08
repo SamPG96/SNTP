@@ -33,7 +33,7 @@ int recieve_SNTP_packet(int sockfd, struct ntp_packet *pkt,
 int send_SNTP_packet(struct ntp_packet *pkt, int sockfd, struct sockaddr_in addr,
                      int debug){
   int numbytes;
-  if( (numbytes = sendto( sockfd, pkt, 48, 0, //48 TODO: make sizeof pkt work
+  if( (numbytes = sendto( sockfd, pkt, sizeof(struct ntp_packet), 0,
       (struct sockaddr *)&addr, sizeof( struct sockaddr))) == -1) {
     print_debug(debug, "error with sending packet");
     return  1;
