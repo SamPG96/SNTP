@@ -1,4 +1,5 @@
 Simple Network Time Protocol (SNTP) Client and Server
+
 =====================================================
 
 This repository contains my output from an assignment during my second year of studies.
